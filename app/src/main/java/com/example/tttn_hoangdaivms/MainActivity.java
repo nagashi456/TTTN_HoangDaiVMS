@@ -1,72 +1,94 @@
 package com.example.tttn_hoangdaivms;
 
+import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.TextView;
-import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.tttn_hoangdaivms.R;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.fragment.app.Fragment;
+
+import com.example.tttn_hoangdaivms.DriverList.DriverListFragment;
+import com.example.tttn_hoangdaivms.Home.HomeFragement;
+import com.example.tttn_hoangdaivms.Database.User;   // giữ import nếu bạn dùng kiểu này
+import com.example.tttn_hoangdaivms.Request.RequestFragement;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.button.MaterialButton;
 
 public class MainActivity extends AppCompatActivity {
 
-    private TextView tvUserName, tvVehicleCount, tvDriverCount;
-    private MaterialButton btnLogout;
     private BottomNavigationView bottomNavigation;
+    private User currentUser; // vẫn giữ nếu bạn muốn dùng ở Activity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Tắt night mode
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        initViews();
-        setupData();
-        setupListeners();
-    }
+        // Lấy intent + extras (nếu LoginActivity đã putExtra gì vào intent, ta giữ nguyên bundle đó)
+        Intent intent = getIntent();
+        Bundle extras = (intent != null) ? intent.getExtras() : null;
 
-    private void initViews() {
-        tvUserName = findViewById(R.id.tvUserName);
-        tvVehicleCount = findViewById(R.id.tvVehicleCount);
-        tvDriverCount = findViewById(R.id.tvDriverCount);
-        btnLogout = findViewById(R.id.btnLogout);
+        // Nếu bạn vẫn muốn tham chiếu object currentUser trong Activity (tuỳ bạn LoginActivity đã putParcelable hay putSerializable)
+        // Thử lấy Parcelable trước (nếu có)
+        if (intent != null) {
+            try {
+                currentUser = intent.getParcelableExtra("current_user");
+            } catch (Exception e) {
+                // nếu không phải Parcelable thì bỏ qua (nếu User là Serializable, bạn có thể lấy bằng getSerializable)
+                try {
+                    Object obj = intent.getSerializableExtra("current_user");
+                    if (obj instanceof User) {
+                        currentUser = (User) obj;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
         bottomNavigation = findViewById(R.id.bottomNavigation);
 
-    }
-
-
-
-    private void setupData() {
-        // Set user data
-        tvUserName.setText("Nguyễn Văn A");
-        tvVehicleCount.setText("30");
-        tvDriverCount.setText("17");
-    }
-
-    private void setupListeners() {
-        btnLogout.setOnClickListener(v -> {
-            Toast.makeText(this, "Đăng xuất", Toast.LENGTH_SHORT).show();
-            // Add logout logic here
-        });
+        // Mặc định load HomeFragment khi mở app
+        if (savedInstanceState == null) {
+            // Tạo fragment bằng constructor mặc định, setArguments bằng bundle extras (nếu có)
+            HomeFragement homeFragment = new HomeFragement();
+            if (extras != null) {
+                homeFragment.setArguments(extras);
+            }
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.containerMain, homeFragment)
+                    .commit();
+        }
 
         bottomNavigation.setOnItemSelectedListener(item -> {
-            int itemId = item.getItemId();
-            if (itemId == R.id.nav_home) {
-                Toast.makeText(this, "Trang chủ", Toast.LENGTH_SHORT).show();
-                return true;
-            } else if (itemId == R.id.nav_transport) {
-                Toast.makeText(this, "Vận tải", Toast.LENGTH_SHORT).show();
-                return true;
-            } else if (itemId == R.id.nav_request) {
-                Toast.makeText(this, "Yêu cầu", Toast.LENGTH_SHORT).show();
+            Fragment fragment = null;
+
+            if (item.getItemId() == R.id.nav_home) {
+                HomeFragement home = new HomeFragement();
+                if (extras != null) {
+                    // truyền tiếp cùng bundle (giữ thông tin đăng nhập)
+                    home.setArguments(extras);
+                }
+                fragment = home;
+            } else if (item.getItemId() == R.id.nav_transport) {
+                fragment = new DriverListFragment();
+            } else if (item.getItemId() == R.id.nav_request) {
+                fragment = new RequestFragement();
+            }
+
+            if (fragment != null) {
+                getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, fragment)
+                        .commit();
                 return true;
             }
             return false;
         });
+    }
 
-        findViewById(R.id.btnEdit).setOnClickListener(v -> {
-            Toast.makeText(this, "Chỉnh sửa", Toast.LENGTH_SHORT).show();
-        });
+    // Nếu cần cập nhật user sau này (ví dụ gọi khi login xong trong app), bạn có thể gọi method này
+    public void updateCurrentUser(User user) {
+        this.currentUser = user;
     }
 }
