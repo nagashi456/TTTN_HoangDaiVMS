@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F8FF"
+    android:fillViewport="true">
+
+<!--    <LinearLayout-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:orientation="vertical">-->
+
+<!--        &lt;!&ndash; Header area with rounded bottom &ndash;&gt;-->
+<!--        <androidx.constraintlayout.widget.ConstraintLayout-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="220dp"-->
+<!--            android:background="@drawable/bg_header_rounded">-->
+
+<!--            &lt;!&ndash; Close icon &ndash;&gt;-->
+<!--            <ImageButton-->
+<!--                android:id="@+id/btnClose"-->
+<!--                android:layout_width="40dp"-->
+<!--                android:layout_height="40dp"-->
+<!--                android:background="@android:color/transparent"-->
+<!--                android:src="@android:drawable/ic_input_delete"-->
+<!--                app:layout_constraintTop_toTopOf="parent"-->
+<!--                app:layout_constraintStart_toStartOf="parent"-->
+<!--                app:layout_constraintTop_margin="16dp"-->
+<!--                app:layout_constraintStart_margin="12dp"/>-->
+
+<!--            &lt;!&ndash; Title centered &ndash;&gt;-->
+<!--            <TextView-->
+<!--                android:id="@+id/tvTitle"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Tài xế"-->
+<!--                android:textColor="#FFFFFF"-->
+<!--                android:textSize="20sp"-->
+<!--                android:textStyle="bold"-->
+<!--                app:layout_constraintTop_toTopOf="parent"-->
+<!--                app:layout_constraintTop_margin="20dp"-->
+<!--                app:layout_constraintStart_toStartOf="parent"-->
+<!--                app:layout_constraintEnd_toEndOf="parent"/>-->
+
+<!--            &lt;!&ndash; Avatar card (overlapping white area below) &ndash;&gt;-->
+<!--            <androidx.cardview.widget.CardView-->
+<!--                android:id="@+id/cardAvatar"-->
+<!--                android:layout_width="120dp"-->
+<!--                android:layout_height="120dp"-->
+<!--                app:cardCornerRadius="20dp"-->
+<!--                app:cardElevation="6dp"-->
+<!--                android:translationY="50dp"-->
+<!--                app:layout_constraintTop_toTopOf="parent"-->
+<!--                app:layout_constraintStart_toStartOf="parent"-->
+<!--                app:layout_constraintEnd_toEndOf="parent">-->
+
+<!--                <ImageView-->
+<!--                    android:id="@+id/imgAvatar"-->
+<!--                    android:layout_width="match_parent"-->
+<!--                    android:layout_height="match_parent"-->
+<!--                    android:scaleType="centerCrop"-->
+<!--                    android:src="@drawable/avatar1" />-->
+<!--            </androidx.cardview.widget.CardView>-->
+
+<!--            &lt;!&ndash; Call & Email small buttons positioned relative to avatar &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:id="@+id/btnsContactContainer"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:gravity="center"-->
+<!--                android:orientation="horizontal"-->
+<!--                app:layout_constraintBottom_toBottomOf="parent"-->
+<!--                app:layout_constraintEnd_toEndOf="parent"-->
+<!--                app:layout_constraintStart_toStartOf="parent"-->
+<!--                app:layout_constraintTop_toBottomOf="@+id/cardAvatar">-->
+
+<!--                &lt;!&ndash; left call button &ndash;&gt;-->
+<!--                <ImageButton-->
+<!--                    android:id="@+id/btnCall"-->
+<!--                    android:layout_width="52dp"-->
+<!--                    android:layout_height="52dp"-->
+<!--                    android:layout_marginEnd="90dp"-->
+<!--                    android:background="@drawable/bg_cricle_white"-->
+<!--                    android:elevation="6dp"-->
+<!--                    android:src="@android:drawable/ic_menu_call"-->
+<!--                    app:tint="#2E7CF6" />-->
+
+<!--                &lt;!&ndash; right email button &ndash;&gt;-->
+<!--                <ImageButton-->
+<!--                    android:id="@+id/btnEmail"-->
+<!--                    android:layout_width="52dp"-->
+<!--                    android:layout_height="52dp"-->
+<!--                    android:layout_marginStart="90dp"-->
+<!--                    android:background="@drawable/bg_cricle_white"-->
+<!--                    android:elevation="6dp"-->
+<!--                    android:src="@android:drawable/ic_dialog_email"-->
+<!--                    app:tint="#2E7CF6" />-->
+<!--            </LinearLayout>-->
+
+<!--        </androidx.constraintlayout.widget.ConstraintLayout>-->
+
+<!--        &lt;!&ndash; White content area (overlapping header) &ndash;&gt;-->
+<!--        <LinearLayout-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:orientation="vertical"-->
+<!--            android:background="#FFFFFF"-->
+<!--            android:paddingTop="70dp"-->
+<!--            android:paddingBottom="16dp"-->
+<!--            android:paddingStart="16dp"-->
+<!--            android:paddingEnd="16dp"-->
+<!--            android:layout_marginTop="-40dp"> &lt;!&ndash; pull up to overlap header &ndash;&gt;-->
+
+<!--            &lt;!&ndash; Name & address &ndash;&gt;-->
+<!--            <TextView-->
+<!--                android:id="@+id/tvName"-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Ngô Văn Tuấn"-->
+<!--                android:textSize="20sp"-->
+<!--                android:textStyle="bold"-->
+<!--                android:textColor="#111111"-->
+<!--                android:gravity="center"/>-->
+
+<!--            <TextView-->
+<!--                android:id="@+id/tvAddress"-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="111 Thanh Thủy, Hải Châu, Tp Đà Nẵng"-->
+<!--                android:textSize="13sp"-->
+<!--                android:textColor="#7A7A7A"-->
+<!--                android:gravity="center"-->
+<!--                android:layout_marginTop="4dp"/>-->
+
+<!--            &lt;!&ndash; Section: Thông tin chung &ndash;&gt;-->
+<!--            <LinearLayout-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:orientation="horizontal"-->
+<!--                android:gravity="center_vertical"-->
+<!--                android:layout_marginTop="18dp">-->
+
+<!--                <TextView-->
+<!--                    android:layout_width="0dp"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:layout_weight="1"-->
+<!--                    android:text="Thông tin chung"-->
+<!--                    android:textSize="16sp"-->
+<!--                    android:textStyle="bold"-->
+<!--                    android:textColor="#111111" />-->
+
+<!--                <ImageButton-->
+<!--                    android:id="@+id/btnEditInfo"-->
+<!--                    android:layout_width="36dp"-->
+<!--                    android:layout_height="36dp"-->
+<!--                    android:background="@android:color/transparent"-->
+<!--                    android:src="@drawable/ic_edit"-->
+<!--                    android:tint="#444444"/>-->
+<!--            </LinearLayout>-->
+
+<!--            &lt;!&ndash; Horizontal cards &ndash;&gt;-->
+<!--            <HorizontalScrollView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:paddingTop="8dp"-->
+<!--                android:paddingBottom="8dp"-->
+<!--                android:scrollbars="none">-->
+
+<!--                <LinearLayout-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="horizontal">-->
+
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                </LinearLayout>-->
+<!--            </HorizontalScrollView>-->
+
+<!--            &lt;!&ndash; Thông tin sức khỏe &ndash;&gt;-->
+<!--            <TextView-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Thông tin sức khỏe"-->
+<!--                android:textSize="16sp"-->
+<!--                android:textStyle="bold"-->
+<!--                android:layout_marginTop="8dp"-->
+<!--                android:textColor="#111111" />-->
+
+<!--            <HorizontalScrollView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:paddingTop="8dp"-->
+<!--                android:paddingBottom="8dp"-->
+<!--                android:scrollbars="none">-->
+
+<!--                <LinearLayout-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="horizontal">-->
+
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                </LinearLayout>-->
+<!--            </HorizontalScrollView>-->
+
+<!--            &lt;!&ndash; Thông tin bằng cấp &ndash;&gt;-->
+<!--            <TextView-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:text="Thông tin bằng cấp"-->
+<!--                android:textSize="16sp"-->
+<!--                android:textStyle="bold"-->
+<!--                android:layout_marginTop="8dp"-->
+<!--                android:textColor="#111111" />-->
+
+<!--            <HorizontalScrollView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:paddingTop="8dp"-->
+<!--                android:paddingBottom="12dp"-->
+<!--                android:scrollbars="none">-->
+
+<!--                <LinearLayout-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:orientation="horizontal">-->
+
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                    <include layout="@layout/item_info_card" />-->
+<!--                </LinearLayout>-->
+<!--            </HorizontalScrollView>-->
+
+<!--        </LinearLayout>-->
+
+<!--    </LinearLayout>-->
+</ScrollView>

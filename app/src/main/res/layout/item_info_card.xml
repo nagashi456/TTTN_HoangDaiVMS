@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="150dp"
+    android:layout_height="140dp"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:layout_marginEnd="12dp"
+    android:background="@drawable/bg_card_light"
+    android:gravity="center">
+
+<!--    &lt;!&ndash; icon circle &ndash;&gt;-->
+<!--    <FrameLayout-->
+<!--        android:layout_width="56dp"-->
+<!--        android:layout_height="56dp"-->
+<!--        android:background="@drawable/bg_cricle_white"-->
+<!--        android:layout_gravity="center">-->
+
+<!--        <ImageView-->
+<!--            android:id="@+id/iconInfo"-->
+<!--            android:layout_width="100dp"-->
+<!--            android:layout_height="100dp"-->
+<!--            android:layout_gravity="center"-->
+<!--            android:src="@drawable/avatar1" />-->
+<!--    </FrameLayout>-->
+
+<!--    <TextView-->
+<!--        android:id="@+id/tvLabel"-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="10dp"-->
+<!--        android:text="SDT"-->
+<!--        android:textColor="#2E7CF6"-->
+<!--        android:textStyle="bold"-->
+<!--        android:textSize="14sp"/>-->
+
+<!--    <TextView-->
+<!--        android:id="@+id/tvValue"-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:text="09311234529"-->
+<!--        android:textSize="13sp"-->
+<!--        android:textColor="#6D9BF8"-->
+<!--        android:layout_marginTop="4dp" />-->
+</LinearLayout>
