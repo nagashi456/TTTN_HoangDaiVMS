@@ -47,7 +47,6 @@ public class RequestAdapter extends RecyclerView.Adapter<RequestAdapter.ViewHold
             tvName = itemView.findViewById(R.id.tvName);
             tvStatus = itemView.findViewById(R.id.tvStatus);
             tvDate = itemView.findViewById(R.id.tvDate);
-            ivMenu = itemView.findViewById(R.id.ivMenu);
             cardContainer = (CardView) itemView;
         }
     }
@@ -82,39 +81,13 @@ public class RequestAdapter extends RecyclerView.Adapter<RequestAdapter.ViewHold
             default:
                 holder.tvStatus.setTextColor(Color.parseColor("#000000")); // đen
                 break;
-
         }
 
         // Sự kiện khi bấm vào item
         holder.cardContainer.setOnClickListener(v -> {
             if (listener != null) listener.onRequestClick(item);
         });
-        holder.ivMenu.setOnClickListener(v -> {
-            PopupMenu popupMenu = new PopupMenu(context, holder.ivMenu);
-            popupMenu.getMenuInflater().inflate(R.menu.menu_request_item, popupMenu.getMenu());
-            popupMenu.setOnMenuItemClickListener(menuItem -> {
-                int id = menuItem.getItemId();
 
-                if (id == R.id.menu_view_detail) {
-                    Toast.makeText(context, "Xem chi tiết: " + item.getName(), Toast.LENGTH_SHORT).show();
-                    if (listener != null) listener.onRequestClick(item);
-                    return true;
-
-                } else if (id == R.id.menu_delete) {
-                    Toast.makeText(context, "Đã xóa yêu cầu của " + item.getName(), Toast.LENGTH_SHORT).show();
-                    // Xóa item khỏi danh sách
-                    int pos = holder.getAdapterPosition();
-                    if (pos != RecyclerView.NO_POSITION) {
-                        items.remove(pos);
-                        notifyItemRemoved(pos);
-                    }
-                    return true;
-                }
-
-                return false;
-            });
-            popupMenu.show();
-        });
     }
     @Override
     public int getItemCount() {

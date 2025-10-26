@@ -1,6 +1,7 @@
 package com.example.tttn_hoangdaivms.Register;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 
 import android.app.DatePickerDialog;
 import android.content.Intent;
@@ -33,6 +34,7 @@ public class RegisterActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.register_activity);
 
@@ -224,7 +226,7 @@ public class RegisterActivity extends AppCompatActivity {
         }
 
         // --- Thêm người dùng mới vào database ---
-        String trangThai = "Đang duyệt";
+        String trangThai = "Đang yêu cầu";
         String vaiTro = "Nhân viên";
 
         boolean success = dbHelper.insertNguoiDung(email, pass, name, birthday, gender, cccd, phone, vaiTro, trangThai);

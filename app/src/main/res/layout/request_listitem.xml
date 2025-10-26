@@ -31,16 +31,6 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             android:layout_marginStart="12dp" />
-        <ImageView
-            android:id="@+id/ivMenu"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/ic_there_dots"
-            android:contentDescription="Menu"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            android:layout_marginBottom="10dp"
-            android:layout_marginEnd="8dp"/>
 
         <!-- Trạng thái -->
         <TextView

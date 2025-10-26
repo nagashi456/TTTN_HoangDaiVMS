@@ -9,6 +9,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.ArrayAdapter;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -22,23 +23,12 @@ import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.Database.User;
 import com.example.tttn_hoangdaivms.R;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 
-/**
- * Fragment dùng cho Thêm / Chỉnh sửa xe.
- * Nếu muốn chỉnh sửa, truyền args vào fragment (optional):
- *  bundle.putString("action","edit");
- *  bundle.putString("id", id);
- *  bundle.putString("bienSo", "UKW 1234"); ... các trường khác
- *
- * Khi lưu fragment sẽ trả về kết quả bằng FragmentResult:
- *  key: "vehicle_result"
- *  bundle contains: "action" ("add" or "edit"), and all fields.
- *
- * Parent fragment/activity nên listen:
- * getSupportFragmentManager().setFragmentResultListener("vehicle_result", this, (key, result) -> { ... });
- */
 public class AddVehicleFragment extends Fragment {
 
     private EditText edtBienSo, edtLoaiXe, edtHangSX, edtMauSac,
@@ -48,11 +38,17 @@ public class AddVehicleFragment extends Fragment {
     private MaterialButton btnSave;
     private ImageView ivBack;
 
+    // Dropdown for drivers
+    private MaterialAutoCompleteTextView actvAssignDriver;
+    private ArrayAdapter<String> driverAdapter;
+    private final List<String> driverNames = new ArrayList<>();
+    private final List<String> driverIds = new ArrayList<>(); // parallel list: same index -> MaNguoiDung (String)
+
     // nếu chỉnh sửa, có thể có id hoặc flag
     private boolean isEdit = false;
     private String vehicleId = null;
 
-    // tên SharedPreferences chứa email người dùng (bạn có thể đổi)
+    // SharedPrefs keys
     private static final String PREFS_NAME = "user_prefs";
     private static final String PREF_KEY_EMAIL = "email";
 
@@ -84,8 +80,14 @@ public class AddVehicleFragment extends Fragment {
         btnSave = view.findViewById(R.id.btnSave);
         ivBack = view.findViewById(R.id.ivBack);
 
+        // CHILD view: AutoCompleteTextView (không map TextInputLayout)
+        actvAssignDriver = view.findViewById(R.id.actvAssignDriver);
+
         // Nếu có args (chỉnh sửa) -> điền dữ liệu lên fields
         readArgumentsAndPopulate();
+
+        // load danh sách tài xế cho dropdown
+        loadDriversForDropdown();
 
         // Gắn listener
         setupListeners();
@@ -103,7 +105,7 @@ public class AddVehicleFragment extends Fragment {
             vehicleId = args.getString("id", null);
         }
 
-        // Các trường khác (nếu có) sẽ được đổ vào EditText (ấn default nếu null)
+        // Các trường khác (nếu có) sẽ được đổ vào EditText
         putIfNotNull(edtBienSo, args.getString("bienSo", null));
         putIfNotNull(edtLoaiXe, args.getString("loaiXe", null));
         putIfNotNull(edtHangSX, args.getString("hangSX", null));
@@ -119,6 +121,14 @@ public class AddVehicleFragment extends Fragment {
         putIfNotNull(edtNoiDung, args.getString("noiDung", null));
         putIfNotNull(edtNgayGanNhat, args.getString("ngayGanNhat", null));
         putIfNotNull(edtDonViThucHien, args.getString("donViThucHien", null));
+
+        // Nếu fragment nhận sẵn driver id/name (edit case) — set text
+        if (args != null) {
+            String assignedDriverName = args.getString("assignedDriverName", null);
+            if (assignedDriverName != null && actvAssignDriver != null) {
+                actvAssignDriver.setText(assignedDriverName, false);
+            }
+        }
     }
 
     private void putIfNotNull(EditText edt, String value) {
@@ -138,14 +148,25 @@ public class AddVehicleFragment extends Fragment {
         }
 
         // Date pickers
-        if (edtNgayBatDau != null) {
-            edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
-        }
-        if (edtNgayKetThuc != null) {
-            edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
-        }
-        if (edtNgayGanNhat != null) {
-            edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
+        if (edtNgayBatDau != null) edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
+        if (edtNgayKetThuc != null) edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
+        if (edtNgayGanNhat != null) edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
+
+        // ensure the AutoCompleteTextView is focusable and will show dropdown
+        if (actvAssignDriver != null) {
+            actvAssignDriver.setThreshold(0); // show even with 0 chars
+            actvAssignDriver.setOnClickListener(v -> {
+                if (driverAdapter != null && driverNames.size() > 0) {
+                    actvAssignDriver.showDropDown();
+                } else {
+                    Toast.makeText(requireContext(), "Chưa có tài xế để chọn", Toast.LENGTH_SHORT).show();
+                }
+            });
+            actvAssignDriver.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus && driverAdapter != null && driverNames.size() > 0) {
+                    actvAssignDriver.showDropDown();
+                }
+            });
         }
 
         // Save
@@ -154,13 +175,16 @@ public class AddVehicleFragment extends Fragment {
                 hideKeyboard();
                 if (!validateInputs()) return;
 
+                // Lấy selected driver name ở UI thread
+                final String selectedDriverName = actvAssignDriver == null ? null : actvAssignDriver.getText().toString().trim();
+
                 // Lấy dữ liệu từ form
                 final String bienSo = getText(edtBienSo);
                 final String loaiXe = getText(edtLoaiXe);
                 final String hangSX = getText(edtHangSX);
                 final String mauSac = getText(edtMauSac);
                 final String soHieu = getText(edtSoHieuLop);
-                // các trường khác
+
                 final String soHopDong = getText(edtSoHopDong);
                 final String ngayBatDau = getText(edtNgayBatDau);
                 final String ngayKetThuc = getText(edtNgayKetThuc);
@@ -171,7 +195,7 @@ public class AddVehicleFragment extends Fragment {
                 final String donVi = getText(edtDonViThucHien);
 
                 // Lấy email người dùng hiện tại: ưu tiên arguments -> SharedPreferences
-                String currentEmail = "admin@vms.com";
+                String currentEmail = null;
                 Bundle args = getArguments();
                 if (args != null) currentEmail = args.getString("currentEmail", null);
 
@@ -180,39 +204,58 @@ public class AddVehicleFragment extends Fragment {
                     currentEmail = prefs.getString(PREF_KEY_EMAIL, null);
                 }
 
-                // Nếu không có email, báo lỗi
-                if (currentEmail == null) {
-                    Toast.makeText(requireContext(), "Không xác định user hiện tại (email).", Toast.LENGTH_LONG).show();
-                    return;
-                }
-
-                // Thực hiện insert trong thread nền
                 final String finalCurrentEmail = currentEmail;
+
                 new Thread(() -> {
                     Database db = new Database(requireContext());
                     try {
-                        // Lấy MaNguoiDung từ email
-                        User currentUser = db.getUserByEmail(finalCurrentEmail);
-                        if (currentUser == null) {
+                        int maTaiXeToAssign = -1;
+
+                        // try find selectedDriverName index in driverNames
+                        if (selectedDriverName != null && !selectedDriverName.isEmpty()) {
+                            int idx = -1;
+                            synchronized (driverNames) {
+                                for (int i = 0; i < driverNames.size(); i++) {
+                                    if (selectedDriverName.equals(driverNames.get(i))) {
+                                        idx = i;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (idx >= 0 && idx < driverIds.size()) {
+                                try {
+                                    maTaiXeToAssign = Integer.parseInt(driverIds.get(idx));
+                                } catch (NumberFormatException ignored) {
+                                    maTaiXeToAssign = -1;
+                                }
+                            }
+                        }
+
+                        // fallback to current user if none selected
+                        if (maTaiXeToAssign == -1 && finalCurrentEmail != null) {
+                            User currentUser = db.getUserByEmail(finalCurrentEmail);
+                            if (currentUser != null) maTaiXeToAssign = currentUser.getMaNguoiDung();
+                        }
+
+                        if (maTaiXeToAssign == -1) {
                             requireActivity().runOnUiThread(() ->
-                                    Toast.makeText(requireContext(), "Không tìm thấy thông tin user để liên kết bảo hiểm.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(requireContext(), "Vui lòng chọn tài xế để gán (hoặc đăng nhập trước).", Toast.LENGTH_LONG).show()
                             );
                             return;
                         }
 
-                        int maTaiXe = currentUser.getMaNguoiDung(); // giả sử User có getId()
+                        final int assignedId = maTaiXeToAssign;
 
-                        // Gọi hàm insert (Database phải có insertXeWithBaoTriAndBaoHiem)
                         boolean inserted = db.insertXeWithBaoTriAndBaoHiem(
                                 bienSo,
                                 loaiXe,
                                 hangSX,
                                 mauSac,
                                 soHieu,
-                                ngayGanNhat, // ngayGapNhat bao tri
+                                ngayGanNhat, // ngayGanNhat bao tri
                                 noiDung,
                                 donVi,
-                                maTaiXe,
+                                assignedId,
                                 soHopDong,
                                 ngayBatDau,
                                 ngayKetThuc,
@@ -220,7 +263,6 @@ public class AddVehicleFragment extends Fragment {
                         );
 
                         if (inserted) {
-                            // Thành công -> trả kết quả về main thread, setFragmentResult và popBackStack
                             requireActivity().runOnUiThread(() -> {
                                 Bundle result = new Bundle();
                                 result.putString("action", isEdit ? "edit" : "add");
@@ -241,13 +283,16 @@ public class AddVehicleFragment extends Fragment {
                                 result.putString("ngayGanNhat", ngayGanNhat);
                                 result.putString("donViThucHien", donVi);
 
+                                result.putString("assignedDriverId", String.valueOf(assignedId));
+                                if (selectedDriverName != null && !selectedDriverName.isEmpty())
+                                    result.putString("assignedDriverName", selectedDriverName);
+
                                 getParentFragmentManager().setFragmentResult("vehicle_result", result);
 
                                 Toast.makeText(requireContext(), (isEdit ? "Cập nhật" : "Thêm") + " xe thành công", Toast.LENGTH_SHORT).show();
                                 if (getActivity() != null) getActivity().getSupportFragmentManager().popBackStack();
                             });
                         } else {
-                            // Thất bại (ví dụ: biển số trùng)
                             requireActivity().runOnUiThread(() ->
                                     Toast.makeText(requireContext(), "Lưu thất bại — kiểm tra lại biển số hoặc dữ liệu.", Toast.LENGTH_LONG).show()
                             );
@@ -260,12 +305,66 @@ public class AddVehicleFragment extends Fragment {
         }
     }
 
+    private void loadDriversForDropdown() {
+        new Thread(() -> {
+            Database db = new Database(requireContext());
+            List<String> names = new ArrayList<>();
+            List<String> ids = new ArrayList<>();
+            try {
+                // Tìm cả các biến thể có dấu & không dấu để tăng khả năng khớp
+                android.database.Cursor cursor = db.getReadableDatabase().rawQuery(
+                        "SELECT MaNguoiDung, HoTen FROM NguoiDung " +
+                                "WHERE lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                "OR lower(COALESCE(VaiTro,'')) LIKE ?",
+                        new String[]{"%nhân viên%", "%tài xế%", "%nhan vien%", "%tai xe%"}
+                );
+
+                if (cursor != null && cursor.moveToFirst()) {
+                    do {
+                        int id = cursor.getInt(0);
+                        String hoTen = cursor.getString(1);
+                        if (hoTen == null || hoTen.trim().isEmpty()) hoTen = "Người dùng " + id;
+                        names.add(hoTen);
+                        ids.add(String.valueOf(id));
+                    } while (cursor.moveToNext());
+                    cursor.close();
+                }
+            } finally {
+                db.close();
+            }
+
+            requireActivity().runOnUiThread(() -> {
+                driverNames.clear();
+                driverIds.clear();
+                driverNames.addAll(names);
+                driverIds.addAll(ids);
+
+                if (actvAssignDriver != null) {
+                    if (driverNames.isEmpty()) {
+                        actvAssignDriver.setHint("Không có tài xế (nhân viên) nào");
+                        actvAssignDriver.setEnabled(false);
+                    } else {
+                        actvAssignDriver.setEnabled(true);
+                        driverAdapter = new ArrayAdapter<>(
+                                requireContext(),
+                                android.R.layout.simple_dropdown_item_1line,
+                                driverNames
+                        );
+                        actvAssignDriver.setAdapter(driverAdapter);
+                        actvAssignDriver.setThreshold(0);
+                    }
+                }
+            });
+        }).start();
+    }
+
     private String getText(EditText edt) {
         return edt != null ? edt.getText().toString().trim() : "";
     }
 
     private boolean validateInputs() {
-        // Ví dụ cơ bản: biển số bắt buộc
         if (edtBienSo == null || TextUtils.isEmpty(edtBienSo.getText())) {
             if (edtBienSo != null) {
                 edtBienSo.setError("Vui lòng nhập biển số");
@@ -273,7 +372,6 @@ public class AddVehicleFragment extends Fragment {
             }
             return false;
         }
-        // Bạn có thể bổ sung validate khác (số hợp đồng chỉ số, email, ngày hợp lệ, ...)
         return true;
     }
 
@@ -298,7 +396,7 @@ public class AddVehicleFragment extends Fragment {
         if (getActivity() == null) return;
         View view = getActivity().getCurrentFocus();
         if (view != null) {
-            InputMethodManager imm = (InputMethodManager) getActivity().getSystemService(getActivity().INPUT_METHOD_SERVICE);
+            InputMethodManager imm = (InputMethodManager) getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
     }

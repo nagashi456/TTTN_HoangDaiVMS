@@ -5,12 +5,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 import android.widget.TextView;
 
@@ -27,19 +29,32 @@ import com.google.android.material.button.MaterialButton;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.text.DecimalFormat;
 
 public class HomeFragement extends Fragment {
 
     private TextView tvName, tvCCCD, tvPhone, tvEmail, tvStatus;
     private TextView tvUserName, tvVehicleCount, tvDriverCount;
+
+    // Health-related TextViews
+    private TextView tvHeight, tvWeight, tvHealthNotes, tvLastCheckup, tvHealthConclusion, tvDrugTest;
+    private TextView tvType, tvDateExpired,tvAddress;
+
+    private LinearLayout stats,certificate;
     private MaterialButton btnLogout;
-    private ImageView btnEdit;
+    private ImageView btnEdit,btnEditProfile;
 
     private Database dbHelper;
     private String loggedInEmail;
 
+    private View cardDriverView, cardVehicleView; // các view cần ẩn/hiện
+
     private static final String PREFS_NAME = "app_prefs";
     private static final String PREF_KEY_EMAIL = "logged_email";
+
+    // colors
+    private final int COLOR_HINT = Color.parseColor("#A0A0A0"); // nhạt
+    private final int COLOR_NORMAL = Color.parseColor("#222222"); // bình thường
 
     @Nullable
     @Override
@@ -60,8 +75,27 @@ public class HomeFragement extends Fragment {
         tvVehicleCount = view.findViewById(R.id.tvVehicleCount);
         tvDriverCount = view.findViewById(R.id.tvDriverCount);
 
+        // Health fields — ensure these IDs exist in your layout
+        tvHeight = view.findViewById(R.id.etHeight);
+        tvWeight = view.findViewById(R.id.etWeight);
+        tvHealthNotes = view.findViewById(R.id.etDisease);
+        tvLastCheckup = view.findViewById(R.id.etLastCheckup);
+        tvDrugTest = view.findViewById(R.id.etDrugTest);
+        tvHealthConclusion = view.findViewById(R.id.etConclusion);
+
+        tvType = view.findViewById(R.id.type);
+        tvDateExpired = view.findViewById(R.id.dateExpired);
+        tvAddress = view.findViewById(R.id.address);
+
         btnLogout = view.findViewById(R.id.btnLogout);
         btnEdit = view.findViewById(R.id.btnEdit);
+
+        // ánh xạ 2 card cần ẩn/hiện (IDs: Driver và Vehicle)
+        cardDriverView = view.findViewById(R.id.Driver);
+        cardVehicleView = view.findViewById(R.id.Vehicle);
+        stats = view.findViewById(R.id.Stats);
+        certificate = view.findViewById(R.id.certificate);
+        btnEditProfile = view.findViewById(R.id.btnEditProfile);
 
         dbHelper = new Database(requireContext());
 
@@ -85,9 +119,15 @@ public class HomeFragement extends Fragment {
             return view;
         }
 
+        // Ẩn/hiện card theo quyền trước khi load chi tiết (tránh flicker)
+        boolean isAdmin = isAdminUser(loggedInEmail);
+        applyAdminVisibility(isAdmin);
+
         // Nạp dữ liệu và gắn listener
         loadUserData();
         loadCounts();
+        loadHealthData();   // <-- load health info
+        loadCertificateData();
         setupListeners();
 
         return view;
@@ -100,7 +140,74 @@ public class HomeFragement extends Fragment {
         if (loggedInEmail != null) {
             loadUserData();
             loadCounts();
+            loadHealthData();
+
+            // mỗi lần resume có thể re-check role (trường hợp role thay đổi runtime)
+            boolean isAdmin = isAdminUser(loggedInEmail);
+            applyAdminVisibility(isAdmin);
         }
+    }
+
+    /**
+     * Áp visibility cho 2 card theo isAdmin:
+     * - nếu isAdmin == true -> VISIBLE
+     * - nếu isAdmin == false -> c
+     */
+    private void applyAdminVisibility(boolean isAdmin) {
+        int visible = isAdmin ? View.VISIBLE : View.GONE;
+        int editVisible = isAdmin ? View.GONE: View.VISIBLE;
+
+        if (cardDriverView != null) cardDriverView.setVisibility(visible);
+        if (cardVehicleView != null) cardVehicleView.setVisibility(visible);
+        if (stats != null) stats.setVisibility(visible);
+        if (certificate != null) certificate.setVisibility(editVisible);
+
+        // btnEditProfile chỉ hiển thị khi là admin
+        if (btnEditProfile != null) btnEditProfile.setVisibility(editVisible);
+    }
+
+
+    /**
+     * Kiểm tra người dùng có phải Admin hay không.
+     * - Truy vấn NguoiDung.VaiTro dựa trên TK.Email
+     * - Nếu role chứa "admin" hoặc "quản trị"/"quản trị viên"/"administrator" -> coi là admin
+     * - Fallback: nếu email == admin@vms.com -> admin
+     */
+    private boolean isAdminUser(String email) {
+        if (email == null) return false;
+
+        // fallback admin email mặc định (bạn có thể đổi)
+        if ("admin@vms.com".equalsIgnoreCase(email.trim())) return true;
+
+        SQLiteDatabase db = null;
+        Cursor cursor = null;
+        try {
+            db = dbHelper.getReadableDatabase();
+            cursor = db.rawQuery(
+                    "SELECT COALESCE(ND.VaiTro, '') FROM NguoiDung ND " +
+                            "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
+                            "WHERE TK.Email = ? LIMIT 1",
+                    new String[]{ email }
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String role = cursor.isNull(0) ? "" : cursor.getString(0);
+                if (role != null) {
+                    String rl = role.trim().toLowerCase();
+                    if (rl.contains("admin") || rl.contains("quản trị") || rl.contains("quản trị viên") || rl.contains("administrator")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // nếu truy vấn lỗi, không crash, coi là không phải admin
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+            if (db != null) db.close();
+        }
+
+        return false;
     }
 
     /**
@@ -143,7 +250,7 @@ public class HomeFragement extends Fragment {
         } catch (Exception ignored) {}
 
         if (obj != null) {
-            // dùng reflection: thử getEmail(), getEmailAddress(), getHoTen()?? (getHoTen là tên họ tên, không email)
+            // dùng reflection: thử getEmail(), getEmailAddress()
             try {
                 Method m = obj.getClass().getMethod("getEmail");
                 Object val = m.invoke(obj);
@@ -170,8 +277,6 @@ public class HomeFragement extends Fragment {
                 }
             } catch (Exception ignored) {}
 
-            // nếu User class có phương thức getHoTen() và bạn trong LoginActivity put email vào khác tên,
-            // không thể đảm bảo trích ra; hy vọng LoginActivity đã put "email" chuỗi trong bundle.
         }
 
         return null;
@@ -230,7 +335,7 @@ public class HomeFragement extends Fragment {
                 tvVehicleCount.setText("0");
             }
 
-            // Đếm số người có vai trò tài xế (linh hoạt với từ 'tai' hoặc 'tài')
+            // Đếm số người có vai trò 'nhân viên' (ví dụ)
             c2 = db.rawQuery(
                     "SELECT COUNT(*) FROM NguoiDung WHERE lower(COALESCE(VaiTro, '')) LIKE ?",
                     new String[]{"%nhân viên%"}
@@ -247,10 +352,205 @@ public class HomeFragement extends Fragment {
         }
     }
 
+    /**
+     * Load thông tin sức khỏe gần nhất của người dùng (bảng SucKhoe).
+     * Nếu không có bản ghi => hiển thị hint (màu nhạt).
+     */
+    private void loadHealthData() {
+        // đặt hint mặc định
+        setHintStyle(tvHeight, "Chưa có dữ liệu chiều cao");
+        setHintStyle(tvWeight, "Chưa có dữ liệu cân nặng");
+        setHintStyle(tvHealthNotes, "Chưa có ghi chú sức khỏe");
+        setHintStyle(tvDrugTest, "Chưa có kết quả kiểm tra ma túy");
+        setHintStyle(tvLastCheckup, "Chưa có lịch khám");
+        setHintStyle(tvHealthConclusion, "Chưa có kết luận");
+
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery(
+                    "SELECT SK.ChieuCao, SK.CanNang, SK.BenhNen, SK.MaTuy, SK.NgayKham, SK.KetLuan " +
+                            "FROM SucKhoe SK " +
+                            "JOIN NguoiDung ND ON SK.MaNguoiDung = ND.MaNguoiDung " +
+                            "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
+                            "WHERE TK.Email = ? " +
+                            "ORDER BY SK.NgayKham DESC LIMIT 1",
+                    new String[]{ String.valueOf(loggedInEmail) }
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String chieuCao = getColumnSafe(cursor, "ChieuCao", 0);
+                String canNang = getColumnSafe(cursor, "CanNang", 1);
+                String benhNen = getColumnSafe(cursor, "BenhNen", 2);
+                String maTuyStr = getColumnSafe(cursor, "MaTuy", 3);
+                String ngayKham = getColumnSafe(cursor, "NgayKham", 4);
+                String ketLuan = getColumnSafe(cursor, "KetLuan", 5);
+
+                // Hiển thị chiều cao / cân nặng
+                if (chieuCao != null && !chieuCao.trim().isEmpty()) {
+                    setNormalStyle(tvHeight, formatNumberOrDefault(chieuCao, "cm"));
+                } else {
+                    setHintStyle(tvHeight, "Chưa có dữ liệu chiều cao");
+                }
+
+                if (canNang != null && !canNang.trim().isEmpty()) {
+                    setNormalStyle(tvWeight, formatNumberOrDefault(canNang, "kg"));
+                } else {
+                    setHintStyle(tvWeight, "Chưa có dữ liệu cân nặng");
+                }
+
+                // Ghi chú sức khỏe
+                if (benhNen != null && !benhNen.trim().isEmpty()) {
+                    setNormalStyle(tvHealthNotes, benhNen.trim());
+                } else {
+                    setHintStyle(tvHealthNotes, "Chưa có ghi chú sức khỏe");
+                }
+
+                // Xử lý MaTuy: map int -> label (bạn có thể sửa mapping theo DB)
+                if (maTuyStr != null && !maTuyStr.trim().isEmpty()) {
+                    String drugLabel = mapMaTuyToLabel(maTuyStr.trim());
+                    setNormalStyle(tvDrugTest, drugLabel);
+                } else {
+                    setHintStyle(tvDrugTest, "Chưa có kết quả kiểm tra ma túy");
+                }
+
+                // Ngày khám và kết luận
+                if (ngayKham != null && !ngayKham.trim().isEmpty()) {
+                    setNormalStyle(tvLastCheckup, ngayKham.trim());
+                } else {
+                    setHintStyle(tvLastCheckup, "Chưa có lịch khám");
+                }
+
+                if (ketLuan != null && !ketLuan.trim().isEmpty()) {
+                    setNormalStyle(tvHealthConclusion, ketLuan.trim());
+                } else {
+                    setHintStyle(tvHealthConclusion, "Chưa có kết luận");
+                }
+            } else {
+                // giữ hint mặc định (đã set ở đầu)
+            }
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+    }
+
+    /**
+     * Map giá trị MaTuy từ DB sang nhãn dễ đọc.
+     * Giả sử MaTuy = 0 -> Âm tính, 1 -> Dương tính; nếu không parse được trả raw.
+     */
+    private String mapMaTuyToLabel(String maTuyStr) {
+        try {
+            int code = Integer.parseInt(maTuyStr);
+            switch (code) {
+                case 0: return "Âm tính";
+                case 1: return "Dương tính";
+                // Thêm mapping khác nếu DB dùng mã khác
+                default: return "Mã: " + code;
+            }
+        } catch (NumberFormatException e) {
+            // nếu MaTuy trong DB đã là mô tả text rồi thì trả nguyên
+            return maTuyStr;
+        }
+    }
+    private void loadCertificateData() {
+        // đặt hint mặc định
+        setHintStyle(tvType, "Chưa có dữ liệu về bằng");
+        setHintStyle(tvDateExpired, "Chưa có dữ liệu về hạn sử dụng");
+        setHintStyle(tvAddress, "Chưa có dữ liệu về nơi cấp");
+
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery(
+                    "SELECT BC.Loai, BC.NgayHetHan, BC.NoiCap " +
+                            "FROM BangCap BC " +
+                            "JOIN NguoiDung ND ON BC.MaTaiXe = ND.MaNguoiDung " +
+                            "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
+                            "WHERE TK.Email = ? ",
+                    new String[]{ String.valueOf(loggedInEmail) }
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String Loai = getColumnSafe(cursor, "Loai", 0);
+                String NgayHetHan = getColumnSafe(cursor, "NgayHetHan", 1);
+                String NoiCap = getColumnSafe(cursor, "NoiCap", 2);
+
+                // Hiển thị chiều cao / cân nặng
+                if (Loai!= null && !Loai.trim().isEmpty()) {
+                    setNormalStyle(tvType, Loai.trim());
+                } else {
+                    setHintStyle(tvType, "Chưa có dữ liệu loại bằng");
+                }
+
+                if (NgayHetHan != null && !NgayHetHan.trim().isEmpty()) {
+                    setNormalStyle(tvDateExpired, NgayHetHan.trim());
+                } else {
+                    setHintStyle(tvDateExpired, "Chưa có dữ liệu hạn sử dụng");
+                }
+
+                // Ghi chú sức khỏe
+                if (NoiCap!= null && !NoiCap.trim().isEmpty()) {
+                    setNormalStyle(tvAddress, NoiCap.trim());
+                } else {
+                    setHintStyle(tvAddress, "Chưa có nơi cấp");
+                }
+
+            } else {
+                // giữ hint mặc định (đã set ở đầu)
+            }
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+    }
+
+
+    private String formatNumberOrDefault(String raw, String unit) {
+        if (raw == null || raw.trim().isEmpty()) return "—";
+        try {
+            double v = Double.parseDouble(raw);
+            // nếu integer (ví dụ 170.0) hiển thị không phần thập phân
+            if (Math.abs(v - Math.round(v)) < 0.0001) {
+                return String.format("%d %s", Math.round(v), unit);
+            } else {
+                DecimalFormat df = new DecimalFormat("#.#");
+                return df.format(v) + " " + unit;
+            }
+        } catch (Exception e) {
+            // không parse được => trả raw + unit
+            return raw + " " + unit;
+        }
+    }
+
+    private void setHintStyle(TextView tv, String hint) {
+        if (tv == null) return;
+        tv.setText(hint);
+        tv.setTextColor(COLOR_HINT);
+    }
+
+    private void setNormalStyle(TextView tv, String text) {
+        if (tv == null) return;
+        tv.setText(text);
+        tv.setTextColor(COLOR_NORMAL);
+    }
+
     private void setupListeners() {
         // Edit profile -> mở EditProfileFragment, gửi email
         if (btnEdit != null) {
             btnEdit.setOnClickListener(v -> {
+                EditProfileFragment editFragment = new EditProfileFragment();
+                Bundle bundle = new Bundle();
+                bundle.putString("email", loggedInEmail);
+                editFragment.setArguments(bundle);
+
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, editFragment)
+                        .addToBackStack(null)
+                        .commit();
+            });
+        }
+        if (btnEditProfile != null) {
+            btnEditProfile.setOnClickListener(v -> {
                 EditProfileFragment editFragment = new EditProfileFragment();
                 Bundle bundle = new Bundle();
                 bundle.putString("email", loggedInEmail);

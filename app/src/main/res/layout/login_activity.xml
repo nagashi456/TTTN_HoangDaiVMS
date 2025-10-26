@@ -79,6 +79,7 @@
             android:layout_height="50dp"
             android:background="@drawable/bg_edittext_white"
             android:hint="Nhập email"
+            android:text="admin@vms.com"
             android:padding="12dp"
             android:inputType="textEmailAddress"
             android:layout_marginTop="10dp"/>
@@ -98,6 +99,7 @@
             android:layout_height="50dp"
             android:background="@drawable/bg_edittext_white"
             android:hint="Nhập mật khẩu"
+            android:text="123456"
             android:padding="12dp"
             android:inputType="textPassword"
             android:layout_marginTop="10dp"/>

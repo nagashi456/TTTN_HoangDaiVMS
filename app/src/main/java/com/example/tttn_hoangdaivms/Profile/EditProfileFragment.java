@@ -1,19 +1,24 @@
 package com.example.tttn_hoangdaivms.Profile;
 
+import android.app.DatePickerDialog;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewParent;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
-import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,12 +27,20 @@ import androidx.fragment.app.Fragment;
 import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.R;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+
 public class EditProfileFragment extends Fragment {
 
+    private static final String TAG = "EditProfileFrag";
     private static final String PREFS_NAME = "app_prefs";
     private static final String PREF_KEY_EMAIL = "logged_email";
 
     private EditText edtName, edtCCCD, edtPhone, edtEmail, edtStatus;
+    private EditText edtType, edtExpired, edtAdress; // Bằng cấp
     private EditText edtHeight, edtWeight, edtDisease, edtLastCheck, edtResult, edtConclusion;
     private ImageView btnBack;
     private Button btnSave;
@@ -35,6 +48,12 @@ public class EditProfileFragment extends Fragment {
     private Database dbHelper;
     private int userId = -1;
     private String userEmail;
+    private String userRole = ""; // VaiTro lấy từ DB
+
+    // Date format shown to user
+    private final SimpleDateFormat uiDateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+    // possible parse formats from DB
+    private final String[] parseFormats = new String[]{"yyyy-MM-dd", "dd/MM/yyyy", "yyyy/MM/dd", "dd-MM-yyyy"};
 
     @Nullable
     @Override
@@ -54,6 +73,12 @@ public class EditProfileFragment extends Fragment {
         edtEmail = view.findViewById(R.id.etEmail);
         edtStatus = view.findViewById(R.id.etWorkStatus);
 
+        // Bằng cấp
+        edtType = view.findViewById(R.id.etType); // Loại bằng cấp
+        edtExpired = view.findViewById(R.id.etDateExpired); // Ngày hết hạn
+        edtAdress = view.findViewById(R.id.etAddress); // Nơi cấp
+
+        // Sức khỏe
         edtHeight = view.findViewById(R.id.etHeight);
         edtWeight = view.findViewById(R.id.etWeight);
         edtDisease = view.findViewById(R.id.etDisease);
@@ -62,6 +87,9 @@ public class EditProfileFragment extends Fragment {
         edtConclusion = view.findViewById(R.id.etConclusion);
 
         dbHelper = new Database(requireContext());
+
+        // Làm cho các EditText ngày không hiện bàn phím mà mở DatePicker khi bấm
+        setupDatePickers();
 
         // Lấy email từ bundle (ưu tiên) hoặc SharedPreferences
         Bundle args = getArguments();
@@ -86,15 +114,80 @@ public class EditProfileFragment extends Fragment {
         // Nút save: validate và lưu
         btnSave.setOnClickListener(v -> saveData());
 
-        // Nếu bạn không muốn cho chỉnh email trực tiếp, có thể khóa:
-        // edtEmail.setEnabled(false);
-        // Mình để mở để bạn có thể sửa nếu muốn (nhưng lưu ý unique email constraint trong TaiKhoan)
-
         return view;
+    }
+
+    // Thiết lập hành vi cho các EditText ngày: disable keyboard, mở DatePicker khi click/focus
+    private void setupDatePickers() {
+        // edtLastCheck (Ngày khám)
+        if (edtLastCheck != null) {
+            edtLastCheck.setInputType(InputType.TYPE_NULL);
+            edtLastCheck.setFocusable(false);
+            edtLastCheck.setOnClickListener(v -> showDatePickerForEditText(edtLastCheck));
+            edtLastCheck.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) showDatePickerForEditText(edtLastCheck);
+            });
+        }
+
+        // edtExpired (Ngày hết hạn bằng cấp)
+        if (edtExpired != null) {
+            edtExpired.setInputType(InputType.TYPE_NULL);
+            edtExpired.setFocusable(false);
+            edtExpired.setOnClickListener(v -> showDatePickerForEditText(edtExpired));
+            edtExpired.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) showDatePickerForEditText(edtExpired);
+            });
+        }
+    }
+
+    // Hiện DatePicker và set kết quả vào EditText (format dd/MM/yyyy)
+    private void showDatePickerForEditText(EditText target) {
+        if (target == null) return;
+        final Calendar cal = Calendar.getInstance();
+        // nếu EditText hiện có giá trị, thử parse và set vào calendar
+        String cur = target.getText() == null ? "" : target.getText().toString().trim();
+        Date parsed = tryParseDate(cur);
+        if (parsed != null) {
+            cal.setTime(parsed);
+        }
+
+        int y = cal.get(Calendar.YEAR);
+        int m = cal.get(Calendar.MONTH);
+        int d = cal.get(Calendar.DAY_OF_MONTH);
+
+        DatePickerDialog dpd = new DatePickerDialog(requireContext(), (DatePicker view, int year, int month, int dayOfMonth) -> {
+            Calendar sel = Calendar.getInstance();
+            sel.set(year, month, dayOfMonth);
+            String formatted = uiDateFormat.format(sel.getTime());
+            target.setText(formatted);
+        }, y, m, d);
+
+        dpd.show();
+    }
+
+    // Thử parse chuỗi ngày từ nhiều định dạng khả dĩ
+    private Date tryParseDate(String s) {
+        if (s == null || s.trim().isEmpty()) return null;
+        s = s.trim();
+        for (String fmt : parseFormats) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(fmt, Locale.getDefault());
+                sdf.setLenient(false);
+                return sdf.parse(s);
+            } catch (ParseException ignored) {
+            }
+        }
+        // cuối cùng thử uiDateFormat
+        try {
+            return uiDateFormat.parse(s);
+        } catch (ParseException ignored) {
+        }
+        return null;
     }
 
     /**
      * Nạp thông tin người dùng từ DB (NguoiDung + TaiKhoan -> email) và SucKhoe (nếu có)
+     * Đồng thời load BangCap nếu user không phải Admin (theo yêu cầu).
      */
     private void loadUserAndHealth(String email) {
         SQLiteDatabase db = null;
@@ -104,7 +197,7 @@ public class EditProfileFragment extends Fragment {
 
             // Lấy MaNguoiDung theo email (join TaiKhoan -> NguoiDung)
             cursor = db.rawQuery(
-                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, ND.TrangThai, ND.VaiTro, ND.NgaySinh, TK.Email " +
+                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, ND.TrangThai, COALESCE(ND.VaiTro, ''), ND.NgaySinh, TK.Email " +
                             "FROM NguoiDung ND " +
                             "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE TK.Email = ?",
@@ -118,31 +211,32 @@ public class EditProfileFragment extends Fragment {
                 String sdt = safeGet(cursor, 3);
                 String trangThai = safeGet(cursor, 4);
                 String vaiTro = safeGet(cursor, 5);
-                String ngaySinh = safeGet(cursor, 6);
                 String emailFromDb = safeGet(cursor, 7);
 
-                // Gán lên UI
-                edtName.setText(notEmpty(hoTen, ""));
-                edtCCCD.setText(notEmpty(cccd, ""));
-                edtPhone.setText(notEmpty(sdt, ""));
-                edtEmail.setText(notEmpty(emailFromDb, email)); // ưu tiên DB email
-                edtStatus.setText(notEmpty(trangThai, ""));
+                // lưu vaiTro để kiểm tra hiển thị bằng cấp (business rule: show if NOT admin)
+                userRole = vaiTro != null ? vaiTro.trim() : "";
 
+                // Gán lên UI
+                if (edtName != null) edtName.setText(notEmpty(hoTen, ""));
+                if (edtCCCD != null) edtCCCD.setText(notEmpty(cccd, ""));
+                if (edtPhone != null) edtPhone.setText(notEmpty(sdt, ""));
+                if (edtEmail != null) edtEmail.setText(notEmpty(emailFromDb, email)); // ưu tiên DB email
+                if (edtStatus != null) edtStatus.setText(notEmpty(trangThai, ""));
             } else {
                 Toast.makeText(requireContext(), "Không tìm thấy hồ sơ người dùng.", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (cursor != null) { cursor.close(); cursor = null; }
 
-            // Kiểm tra SucKhoe theo MaNguoiDung
+            // Kiểm tra SucKhoe theo MaNguoiDung (nếu có)
             cursor = db.rawQuery(
                     "SELECT MaSucKhoe, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan " +
-                            "FROM SucKhoe WHERE MaNguoiDung = ?",
+                            "FROM SucKhoe WHERE MaNguoiDung = ? ORDER BY NgayKham DESC",
                     new String[]{String.valueOf(userId)}
             );
 
             if (cursor != null && cursor.moveToFirst()) {
-                // Nếu có, hiển thị
+                // Nếu có, hiển thị (lấy bản gần nhất)
                 String chieuCao = safeGet(cursor, 1);
                 String canNang = safeGet(cursor, 2);
                 String benhNen = safeGet(cursor, 3);
@@ -150,14 +244,54 @@ public class EditProfileFragment extends Fragment {
                 String maTuy = safeGet(cursor, 5);
                 String ketLuan = safeGet(cursor, 6);
 
-                edtHeight.setText(notEmpty(chieuCao, ""));
-                edtWeight.setText(notEmpty(canNang, ""));
-                edtDisease.setText(notEmpty(benhNen, ""));
-                edtLastCheck.setText(notEmpty(ngayKham, ""));
-                edtResult.setText(notEmpty(maTuy, ""));
-                edtConclusion.setText(notEmpty(ketLuan, ""));
+                if (edtHeight != null) { edtHeight.setText(notEmpty(chieuCao, "")); edtHeight.setHint(""); }
+                if (edtWeight != null) { edtWeight.setText(notEmpty(canNang, "")); edtWeight.setHint(""); }
+                if (edtDisease != null) { edtDisease.setText(notEmpty(benhNen, "")); edtDisease.setHint(""); }
+                if (edtLastCheck != null) { edtLastCheck.setText(notEmpty(ngayKham, "")); edtLastCheck.setHint(""); }
+                if (edtResult != null) { edtResult.setText(notEmpty(maTuy, "")); edtResult.setHint(""); }
+                if (edtConclusion != null) { edtConclusion.setText(notEmpty(ketLuan, "")); edtConclusion.setHint(""); }
             } else {
-                // Nếu không có SucKhoe, để trống (user có thể nhập)
+                // Nếu không có SucKhoe, để trống và set hint thân thiện
+                if (edtHeight != null) { edtHeight.setText(""); edtHeight.setHint("Chưa có chiều cao"); }
+                if (edtWeight != null) { edtWeight.setText(""); edtWeight.setHint("Chưa có cân nặng"); }
+                if (edtDisease != null) { edtDisease.setText(""); edtDisease.setHint("Chưa có ghi chú bệnh nền"); }
+                if (edtLastCheck != null) { edtLastCheck.setText(""); edtLastCheck.setHint("Chưa có ngày khám (chạm để chọn)"); }
+                if (edtResult != null) { edtResult.setText(""); edtResult.setHint("Chưa có kết quả kiểm tra ma túy"); }
+                if (edtConclusion != null) { edtConclusion.setText(""); edtConclusion.setHint("Chưa có kết luận"); }
+            }
+            if (cursor != null) { cursor.close(); cursor = null; }
+
+            // --- BẰNG CẤP: chỉ hiển thị với user KHÔNG phải Admin ---
+            boolean showDegree = !isAdminRole(userRole);
+            Log.d(TAG, "userRole='" + userRole + "' showDegree=" + showDegree);
+            // Toast để debug (bỏ khi release)
+            // Toast.makeText(requireContext(), "role='" + userRole + "' showDegree=" + showDegree, Toast.LENGTH_SHORT).show();
+
+            showDegreeFields(showDegree);
+
+            if (showDegree) {
+                cursor = db.rawQuery(
+                        "SELECT MaBangCap, Loai, NgayHetHan, NoiCap " +
+                                "FROM BangCap WHERE MaTaiXe = ? LIMIT 1",
+                        new String[]{String.valueOf(userId)}
+                );
+
+                if (cursor != null && cursor.moveToFirst()) {
+                    // Có bằng cấp -> fill vào các edt
+                    String loai = safeGet(cursor, 1);
+                    String ngayHetHan = safeGet(cursor, 2);
+                    String noiCap = safeGet(cursor, 3);
+
+                    if (edtType != null) edtType.setText(notEmpty(loai, ""));
+                    if (edtExpired != null) edtExpired.setText(notEmpty(ngayHetHan, ""));
+                    if (edtAdress != null) edtAdress.setText(notEmpty(noiCap, ""));
+                } else {
+                    // Không có bằng cấp -> clear và set hint
+                    if (edtType != null) { edtType.setText(""); edtType.setHint("Chưa có bằng cấp"); }
+                    if (edtExpired != null) { edtExpired.setText(""); edtExpired.setHint("Chưa có ngày hết hạn (chạm để chọn)"); }
+                    if (edtAdress != null) { edtAdress.setText(""); edtAdress.setHint("Chưa có nơi cấp"); }
+                }
+                if (cursor != null) { cursor.close(); cursor = null; }
             }
 
         } catch (Exception e) {
@@ -173,6 +307,7 @@ public class EditProfileFragment extends Fragment {
      * Lưu / Cập nhật dữ liệu:
      * - Cập nhật NguoiDung (HoTen, CCCD, SDT, TrangThai nếu muốn)
      * - Kiểm tra SucKhoe: nếu đã có -> update, nếu chưa -> insert
+     * - Nếu user KHÔNG phải admin: upsert BangCap tương ứng MaTaiXe = MaNguoiDung
      */
     private void saveData() {
         String name = edtName.getText().toString().trim();
@@ -184,9 +319,13 @@ public class EditProfileFragment extends Fragment {
         String chieuCaoStr = edtHeight.getText().toString().trim();
         String canNangStr = edtWeight.getText().toString().trim();
         String benhNen = edtDisease.getText().toString().trim();
-        String ngayKham = edtLastCheck.getText().toString().trim();
+        String ngayKham = edtLastCheck.getText().toString().trim(); // dd/MM/yyyy
         String maTuy = edtResult.getText().toString().trim();
         String ketLuan = edtConclusion.getText().toString().trim();
+
+        String loai = edtType != null ? edtType.getText().toString().trim() : "";
+        String ngayHetHan = edtExpired != null ? edtExpired.getText().toString().trim() : ""; // dd/MM/yyyy
+        String noiCap = edtAdress != null ? edtAdress.getText().toString().trim() : "";
 
         if (userId == -1) {
             Toast.makeText(requireContext(), "Không tìm thấy user để lưu.", Toast.LENGTH_SHORT).show();
@@ -217,7 +356,6 @@ public class EditProfileFragment extends Fragment {
             if (cursor != null && cursor.moveToFirst()) {
                 // Update existing
                 ContentValues healthValues = new ContentValues();
-                // convert height/weight to numeric if possible, else store null
                 Double chieuCao = parseDoubleOrNull(chieuCaoStr);
                 Double canNang = parseDoubleOrNull(canNangStr);
                 if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
@@ -226,16 +364,14 @@ public class EditProfileFragment extends Fragment {
                 else healthValues.putNull("CanNang");
 
                 healthValues.put("BenhNen", benhNen);
-                healthValues.put("NgayKham", ngayKham);
-                // MaTuy có vẻ integer flag; try parse
+                healthValues.put("NgayKham", ngayKham); // lưu chuỗi dd/MM/yyyy
                 Integer maTuyInt = parseIntOrNull(maTuy);
                 if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
-                else if (!maTuy.isEmpty()) healthValues.put("MaTuy", maTuy); // fallback store as text if schema accepts
+                else if (!maTuy.isEmpty()) healthValues.put("MaTuy", maTuy);
                 healthValues.put("KetLuan", ketLuan);
 
                 int healthUpdated = db.update("SucKhoe", healthValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
                 if (healthUpdated < 1) {
-                    // fallback: try insert
                     healthValues.put("MaNguoiDung", userId);
                     db.insert("SucKhoe", null, healthValues);
                 }
@@ -248,16 +384,48 @@ public class EditProfileFragment extends Fragment {
                 if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
                 if (canNang != null) healthValues.put("CanNang", canNang);
                 healthValues.put("BenhNen", benhNen);
-                healthValues.put("NgayKham", ngayKham);
+                healthValues.put("NgayKham", ngayKham); // lưu chuỗi dd/MM/yyyy
                 Integer maTuyInt = parseIntOrNull(maTuy);
                 if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
                 healthValues.put("KetLuan", ketLuan);
 
                 db.insert("SucKhoe", null, healthValues);
             }
-
-            // Đóng cursor nếu mở
             if (cursor != null) { cursor.close(); cursor = null; }
+
+            // --- BẰNG CẤP: nếu user KHÔNG phải admin thì upsert bảng BangCap ---
+            if (!isAdminRole(userRole)) {
+                // kiểm tra tồn tại theo MaTaiXe = userId
+                cursor = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaTaiXe = ?", new String[]{String.valueOf(userId)});
+                ContentValues bcValues = new ContentValues();
+                bcValues.put("MaTaiXe", userId);
+                if (!TextUtils.isEmpty(loai)) bcValues.put("Loai", loai);
+                else bcValues.putNull("Loai");
+                if (!TextUtils.isEmpty(ngayHetHan)) bcValues.put("NgayHetHan", ngayHetHan);
+                else bcValues.putNull("NgayHetHan");
+                if (!TextUtils.isEmpty(noiCap)) bcValues.put("NoiCap", noiCap);
+                else bcValues.putNull("NoiCap");
+
+                if (cursor != null && cursor.moveToFirst()) {
+                    // update
+                    int rows = db.update("BangCap", bcValues, "MaTaiXe = ?", new String[]{String.valueOf(userId)});
+                    if (rows > 0) {
+                        Toast.makeText(requireContext(), "Cập nhật bằng cấp thành công.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        long id = db.insert("BangCap", null, bcValues);
+                        if (id != -1) Toast.makeText(requireContext(), "Lưu bằng cấp (tạo mới).", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    // insert mới
+                    long id = db.insert("BangCap", null, bcValues);
+                    if (id != -1) {
+                        Toast.makeText(requireContext(), "Tạo bằng cấp thành công.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(requireContext(), "Lỗi khi tạo bằng cấp.", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                if (cursor != null) { cursor.close(); cursor = null; }
+            }
 
             String msg = (updated > 0) ? "Cập nhật thông tin thành công." : "Đã lưu (tạo mới) thông tin người dùng.";
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show();
@@ -276,12 +444,47 @@ public class EditProfileFragment extends Fragment {
         }
     }
 
+    // Hiển thị/ẩn các field bằng cấp (an toàn với parent chain)
+    private void showDegreeFields(boolean show) {
+        int v = show ? View.VISIBLE : View.GONE;
+        setVisibilityWithParents(edtType, v);
+        setVisibilityWithParents(edtExpired, v);
+        setVisibilityWithParents(edtAdress, v);
+    }
+
+    // set visibility cho view và parent chain (đến root) — giúp trường hợp field bị bọc/parent bị gone
+    private void setVisibilityWithParents(View child, int visibility) {
+        if (child == null) {
+            Log.d(TAG, "setVisibilityWithParents: child is null");
+            return;
+        }
+        try {
+            child.setVisibility(visibility);
+            ViewParent p = child.getParent();
+            // set cho tối đa 5 tầng parent để tránh vô tình set visibility toàn app
+            int depth = 0;
+            while (p instanceof View && depth < 5) {
+                ((View) p).setVisibility(visibility);
+                p = p.getParent();
+                depth++;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting visibility for child: " + e.getMessage());
+        }
+    }
+
+    // Kiểm tra role có phải admin không (so sánh lowercase, chứa "admin" hoặc "quản trị")
+    private boolean isAdminRole(String role) {
+        if (role == null) return false;
+        String r = role.trim().toLowerCase();
+        return r.contains("admin") || r.contains("quản trị") || r.contains("quản trị viên") || r.contains("administrator");
+    }
+
     // Helpers
     private Double parseDoubleOrNull(String s) {
         if (s == null) return null;
         s = s.trim();
         if (s.isEmpty()) return null;
-        // Remove non-digit like "m" or "kg" commonly present in UI
         s = s.replaceAll("[^0-9\\.,-]", "");
         s = s.replace(',', '.');
         try {

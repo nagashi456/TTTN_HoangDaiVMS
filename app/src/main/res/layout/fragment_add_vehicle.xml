@@ -229,6 +229,44 @@
 
                     <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#EEE" />
 
+                    <!-- NEW: Dropdown gán tài xế (Material exposed dropdown) -->
+                    <!-- Mặc định ẩn; hiện khi có danh sách tài xế -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:id="@+id/rowAssignDriver">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Tài xế:"
+                            android:textSize="14sp"
+                            android:textColor="#555555"/>
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                            android:id="@+id/actvAssignDriver"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="2"
+                            android:hint="Chọn tài xế"
+                            android:textSize="14sp"
+                            android:paddingVertical="10dp"
+                            android:paddingHorizontal="12dp"
+                            android:background="@android:color/transparent"
+                            android:inputType="none"
+                            android:focusable="false"
+                            android:clickable="true"
+                            android:drawablePadding="8dp"
+                            android:imeOptions="actionDone" />
+
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#EEE" />
+
                     <!-- Row: Nhiên liệu -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -258,6 +296,10 @@
                     </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
+
+            <!-- (phần Bảo hiểm & Bảo trì ... không thay đổi) -->
+            <!-- ... (giữ nguyên như trước) -->
+            <!-- (mình giữ phần này nguyên, như file bạn đưa trước) -->
 
             <!-- Bảo hiểm -->
             <TextView

@@ -3,9 +3,12 @@ package com.example.tttn_hoangdaivms.Request;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,6 +30,10 @@ public class RequestFragement extends Fragment {
     private List<RequestModel> requestList;
     private Database dbHelper;
 
+    // --- cho search ---
+    private EditText searchEditText;
+    private List<RequestModel> requestListFull; // bản đầy đủ để restore/filter
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -38,14 +45,38 @@ public class RequestFragement extends Fragment {
         recyclerViewRequests = view.findViewById(R.id.requestRecyclerView);
         recyclerViewRequests.setLayoutManager(new LinearLayoutManager(requireContext()));
 
+        searchEditText = view.findViewById(R.id.searchEditText); // đảm bảo layout có EditText với id này
+
         dbHelper = new Database(requireContext());
 
         // Load lần đầu
         loadRequestsFromDatabase();
 
+        // Lưu bản đầy đủ để filter/restore
+        requestListFull = new ArrayList<>(requestList);
+
         // Tạo adapter lần đầu với requestList hiện tại
         requestAdapter = new RequestAdapter(requireContext(), requestList, request -> openDetailFragment(request));
         recyclerViewRequests.setAdapter(requestAdapter);
+
+        // set up search watcher
+        searchEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // no-op
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String q = s == null ? "" : s.toString();
+                filterRequests(q);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                // no-op
+            }
+        });
 
         // Lắng nghe result từ RequestDetailFragment: khi có needRefresh => tải lại dữ liệu và cập nhật adapter
         getParentFragmentManager().setFragmentResultListener("request_update", this, (requestKey, bundle) -> {
@@ -54,12 +85,19 @@ public class RequestFragement extends Fragment {
                 // Load lại dữ liệu từ DB
                 loadRequestsFromDatabase();
 
-                // Cách 1 (đơn giản): tạo adapter mới và set lại
-                requestAdapter = new RequestAdapter(requireContext(), requestList, request -> openDetailFragment(request));
-                recyclerViewRequests.setAdapter(requestAdapter);
+                // Cập nhật bản full
+                requestListFull = new ArrayList<>(requestList);
 
-                // Nếu bạn muốn giữ scroll position, thay vì tạo adapter mới hãy gọi:
-                // requestAdapter.updateData(requestList);
+                // Nếu đang có query, áp filter -> adapter sẽ được cập nhật
+                String currentQuery = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
+                if (currentQuery.trim().isEmpty()) {
+                    // Cách đơn giản: tạo adapter mới (giữ code ngắn và an toàn)
+                    requestAdapter = new RequestAdapter(requireContext(), requestList, request -> openDetailFragment(request));
+                    recyclerViewRequests.setAdapter(requestAdapter);
+                } else {
+                    // Áp filter với query hiện tại (filterRequests sẽ cập nhật adapter)
+                    filterRequests(currentQuery);
+                }
             }
         });
 
@@ -86,7 +124,7 @@ public class RequestFragement extends Fragment {
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
-                    int userId = cursor.getInt(0);
+                    int userId = cursor.isNull(0) ? -1 : cursor.getInt(0);
                     String name = cursor.isNull(1) ? "" : cursor.getString(1);
                     String cccd = cursor.isNull(2) ? "" : cursor.getString(2);
                     String phone = cursor.isNull(3) ? "" : cursor.getString(3);
@@ -121,5 +159,39 @@ public class RequestFragement extends Fragment {
                 .replace(R.id.containerMain, detailFragment)
                 .addToBackStack(null)
                 .commit();
+    }
+
+    // ===== FILTER =====
+    private void filterRequests(String query) {
+        String q = query == null ? "" : query.trim().toLowerCase();
+        List<RequestModel> filtered = new ArrayList<>();
+
+        if (q.isEmpty()) {
+            filtered.addAll(requestListFull);
+        } else {
+            for (RequestModel r : requestListFull) {
+                String name = r.getName() == null ? "" : r.getName().toLowerCase();
+                String cccd = r.getCccd() == null ? "" : r.getCccd().toLowerCase();
+                String phone = r.getPhone() == null ? "" : r.getPhone().toLowerCase();
+                String email = r.getEmail() == null ? "" : r.getEmail().toLowerCase();
+                String status = r.getStatus() == null ? "" : r.getStatus().toLowerCase();
+                String date = r.getDate() == null ? "" : r.getDate().toLowerCase();
+
+                if (name.contains(q) || cccd.contains(q) || phone.contains(q) || email.contains(q) || status.contains(q) || date.contains(q)) {
+                    filtered.add(r);
+                }
+            }
+        }
+
+        // Cập nhật adapter: tạo adapter mới hoặc cập nhật data nếu adapter hỗ trợ method update
+        if (requestAdapter != null) {
+            // Nếu adapter có method updateData(List<RequestModel>) bạn có thể gọi nó.
+            // Vì không chắc adapter của bạn có hay không, mình sẽ tạo adapter mới (an toàn).
+            requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
+            recyclerViewRequests.setAdapter(requestAdapter);
+        } else {
+            requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
+            recyclerViewRequests.setAdapter(requestAdapter);
+        }
     }
 }
