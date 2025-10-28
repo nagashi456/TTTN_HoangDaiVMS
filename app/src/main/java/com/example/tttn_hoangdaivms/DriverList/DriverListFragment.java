@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DriverListFragment extends Fragment {
+    private static final String TAG = "DriverListFragment";
+
     private RecyclerView driverRecyclerView;
     private DriverListAdapter driverAdapter;
     private VehicleListAdapter vehicleAdapter;
@@ -69,22 +72,22 @@ public class DriverListFragment extends Fragment {
         // Khởi tạo danh sách
         driverList = new ArrayList<>();
         driverIds = new ArrayList<>();
+        vehicleList = new ArrayList<>();
+
+        // Load dữ liệu từ DB
         loadDriversFromDatabase();   // sẽ điền driverList & driverIds
-        vehicleList = loadVehiclesFromDatabase();
+        vehicleList = loadVehiclesFromDatabase(); // trả VehicleListModel có MaXe
 
         // lưu bản đầy đủ để restore/filter
         driverListFull = new ArrayList<>(driverList);
         driverIdsFull = new ArrayList<>(driverIds);
         vehicleListFull = new ArrayList<>(vehicleList);
 
-        // Adapter driver: khi click -> nhận DriverListModel (như adapter cũ của bạn)
-// 1) khởi tạo adapter 1 lần (sau khi loadDriversFromDatabase())
+        // ===== Driver adapter (giữ nguyên logic hiện có)
         driverAdapter = new DriverListAdapter(requireContext(), driverList, driverIds, new DriverListAdapter.OnDriverActionListener() {
             @Override
             public void onDriverClick(DriverListModel driver, int position, String id) {
-                // mở chi tiết
                 if (position == -1 || id == null) {
-                    // fallback tìm lại index nếu cần
                     int pos = findIndexByNameAndLocation(driver.getName(), driver.getLocation());
                     if (pos >= 0 && pos < driverIds.size()) id = driverIds.get(pos);
                     position = pos;
@@ -103,7 +106,6 @@ public class DriverListFragment extends Fragment {
 
             @Override
             public void onEditRequested(DriverListModel driver, int position, String id) {
-                // tạm thời show toast (hoặc mở fragment edit nếu có)
                 Toast.makeText(requireContext(), "Chức năng sửa tạm thời chưa có.", Toast.LENGTH_SHORT).show();
             }
 
@@ -114,33 +116,20 @@ public class DriverListFragment extends Fragment {
                     return;
                 }
 
-                // Xóa DB (đơn giản, chạy trên UI thread; nếu DB nặng, chạy background)
                 SQLiteDatabase db = null;
                 try {
                     db = dbHelper.getWritableDatabase();
-
-                    // XÓA các bảng liên quan nếu cần (tuỳ schema)
-                    // db.delete("SucKhoe", "MaNguoiDung = ?", new String[]{id});
-                    // db.delete("BangCap", "MaTaiXe = ?", new String[]{id});
-                    // ... (xóa TaiKhoan nếu cần, phải lấy MaTaiKhoan trước)
-
                     int rows = db.delete("NguoiDung", "MaNguoiDung = ?", new String[]{id});
                     if (rows > 0) {
-                        // --- CHÚ Ý: KHÔNG xóa trực tiếp driverList/driverIds ở đây ---
-                        // Chỉ gọi adapter.removeAt(...) để adapter xử lý và thông báo RecyclerView.
                         int removeIndex = -1;
-
-                        // ưu tiên dùng position nếu hợp lệ và id trùng khớp
                         if (position >= 0 && position < driverIds.size() && id.equals(driverIds.get(position))) {
                             removeIndex = position;
                         } else {
-                            // fallback: tìm index theo id trong driverIds (dữ liệu hiển thị hiện tại)
                             removeIndex = driverIds.indexOf(id);
                         }
 
                         if (removeIndex >= 0) {
-                            // Cập nhật cả các "full lists" dùng cho filter
-                            // (xóa khỏi driverListFull/driverIdsFull để lần filter sau không show item đã xóa)
+                            // remove from full lists too
                             for (int i = 0; i < driverIdsFull.size(); i++) {
                                 if (driverIdsFull.get(i).equals(id)) {
                                     driverIdsFull.remove(i);
@@ -148,17 +137,10 @@ public class DriverListFragment extends Fragment {
                                     break;
                                 }
                             }
-
-                            // Gọi adapter để xóa (adapter giữ reference tới driverList & driverIds)
                             driverAdapter.removeAt(removeIndex);
-
-                            // Nếu bạn muốn đảm bảo vị trí index của các item sau được cập nhật:
-                            // driverAdapter.notifyItemRangeChanged(removeIndex, driverAdapter.getItemCount() - removeIndex);
-
                             Toast.makeText(requireContext(), "Xóa thành công.", Toast.LENGTH_SHORT).show();
                         } else {
-                            // Nếu không tìm thấy vị trí trong adapter (có thể do filter khác), chỉ update full lists
-                            // và refresh lại adapter dữ liệu từ full lists:
+                            // fallback: rebuild from full lists
                             for (int i = 0; i < driverIdsFull.size(); i++) {
                                 if (driverIdsFull.get(i).equals(id)) {
                                     driverIdsFull.remove(i);
@@ -166,14 +148,11 @@ public class DriverListFragment extends Fragment {
                                     break;
                                 }
                             }
-                            // Rebuild display lists from full lists
-                            // Nếu bạn đang áp filter, dễ nhất là gọi filterDrivers(currentQuery) hoặc:
                             driverList.clear();
                             driverIds.clear();
                             driverList.addAll(driverListFull);
                             driverIds.addAll(driverIdsFull);
                             driverAdapter.notifyDataSetChanged();
-
                             Toast.makeText(requireContext(), "Xóa thành công (cập nhật danh sách).", Toast.LENGTH_SHORT).show();
                         }
                     } else {
@@ -187,15 +166,13 @@ public class DriverListFragment extends Fragment {
                     if (db != null) db.close();
                 }
             }
-
         });
 
-// 2) set adapter cho recyclerview
+        // ===== Vehicle adapter: listener nhận maXe (int)
         vehicleAdapter = new VehicleListAdapter(vehicleList, maXe -> {
+            // Hiện toast (debug) và mở VehicleDetailFragment
             Toast.makeText(requireContext(), "Mã xe: " + maXe, Toast.LENGTH_SHORT).show();
-
-            // mở VehicleDetailFragment
-            VehicleDetailFragment    frag = VehicleDetailFragment.newInstance(maXe);
+            VehicleDetailFragment frag = VehicleDetailFragment.newInstance(maXe);
             requireActivity().getSupportFragmentManager()
                     .beginTransaction()
                     .replace(R.id.containerMain, frag)
@@ -210,32 +187,18 @@ public class DriverListFragment extends Fragment {
 
         // set up search watcher
         searchEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // no-op
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 String q = s == null ? "" : s.toString();
-                if (isDriverSelected) {
-                    filterDrivers(q);
-                } else {
-                    filterVehicles(q);
-                }
+                if (isDriverSelected) filterDrivers(q); else filterVehicles(q);
             }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                // no-op
-            }
+            @Override public void afterTextChanged(Editable s) {}
         });
 
         btnDriver.setOnClickListener(v -> {
             setSelectedSegment(true);
             driverRecyclerView.setAdapter(driverAdapter);
             fabAdd.setVisibility(View.GONE);
-            // áp lại filter với nội dung hiện có trong search
             String q = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
             filterDrivers(q);
         });
@@ -244,7 +207,6 @@ public class DriverListFragment extends Fragment {
             setSelectedSegment(false);
             driverRecyclerView.setAdapter(vehicleAdapter);
             fabAdd.setVisibility(View.VISIBLE);
-            // áp lại filter với nội dung hiện có trong search
             String q = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
             filterVehicles(q);
         });
@@ -286,74 +248,85 @@ public class DriverListFragment extends Fragment {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor cursor = null;
         try {
-            // Lấy MaNguoiDung đầu tiên (để dễ map), sau đó các trường hiển thị
             cursor = db.rawQuery(
                     "SELECT ND.MaNguoiDung, ND.HoTen, ND.NgaySinh, ND.SDT, ND.CCCD, ND.GioiTinh, TK.Email " +
                             "FROM NguoiDung ND " +
-                            "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan OR ND.MaTaiKhoan = TK.MaTaiKhoan " + // phòng trường hợp tên cột khác
+                            "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE lower(COALESCE(ND.VaiTro, '')) LIKE ? OR lower(COALESCE(ND.VaiTro, '')) LIKE ?",
                     new String[]{"%nhân viên%", "%tai xe%"}
             );
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
-                    // Lấy MaNguoiDung (int) rồi chuyển thành String
                     String idStr = "";
                     try {
                         int idInt = cursor.getInt(0);
                         idStr = String.valueOf(idInt);
                     } catch (Exception e) {
-                        // nếu cột không phải int, thử lấy string
                         idStr = safeGet(cursor, 0);
                     }
 
                     String name = safeGet(cursor, 1);
                     String ngaySinh = safeGet(cursor, 2);
-
                     String addrOrBirth = (ngaySinh != null && !ngaySinh.isEmpty()) ? ngaySinh : "Chưa cập nhật";
 
-                    // Thêm model hiển thị
                     DriverListModel model = new DriverListModel(
                             (name != null && !name.isEmpty()) ? name : "Không rõ",
                             addrOrBirth,
                             R.drawable.avatar1
                     );
                     driverList.add(model);
-                    driverIds.add(idStr); // cùng index với driverList
+                    driverIds.add(idStr);
                 } while (cursor.moveToNext());
             }
+        } catch (Exception ex) {
+            Log.e(TAG, "loadDriversFromDatabase error", ex);
         } finally {
             if (cursor != null) cursor.close();
         }
     }
 
     // ===============================
-    // 🔹 TRUY VẤN DANH SÁCH XE
+    // 🔹 TRUY VẤN DANH SÁCH XE (LẤY MaXe)
     // ===============================
     private List<VehicleListModel> loadVehiclesFromDatabase() {
         List<VehicleListModel> list = new ArrayList<>();
         SQLiteDatabase db = dbHelper.getReadableDatabase();
-
         Cursor cursor = null;
         try {
-            cursor = db.rawQuery("SELECT BienSo, LoaiXe FROM Xe", null);
+            // Lấy MaXe để có thể truyền sang VehicleDetailFragment
+            cursor = db.rawQuery("SELECT MaXe, BienSo, LoaiXe FROM Xe", null);
             if (cursor != null && cursor.moveToFirst()) {
                 do {
-                    String plate = safeGet(cursor, 0);
-                    String name = safeGet(cursor, 1);
-                    list.add(new VehicleListModel(plate, name != null ? name : "Không rõ", R.drawable.avatar1));
+                    int maXe = -1;
+                    try {
+                        maXe = cursor.getInt(0);
+                    } catch (Exception e) {
+                        // fallback: nếu không parse được, bỏ qua (không hiển thị item đó)
+                        Log.w(TAG, "MaXe không hợp lệ tại hàng, bỏ qua item", e);
+                        continue;
+                    }
+                    String plate = safeGet(cursor, 1);
+                    String name = safeGet(cursor, 2);
+
+                    // Giả định VehicleListModel có constructor (int maXe, String plate, String name, int imageResId)
+                    VehicleListModel v = new VehicleListModel(maXe,
+                            (plate != null && !plate.isEmpty()) ? plate : "-",
+                            (name != null && !name.isEmpty()) ? name : "Không rõ",
+                            R.drawable.avatar1
+                    );
+                    list.add(v);
                 } while (cursor.moveToNext());
             }
+        } catch (Exception ex) {
+            Log.e(TAG, "loadVehiclesFromDatabase error", ex);
         } finally {
             if (cursor != null) cursor.close();
         }
-
         return list;
     }
 
-    /**
-     * Fallback: tìm index trong driverList bằng name + location (nếu indexOf() không tìm thấy)
-     */
+    // Fallback: tìm index trong driverList bằng name + location (nếu indexOf() không tìm thấy)
     private int findIndexByNameAndLocation(String name, String location) {
         if (name == null) name = "";
         if (location == null) location = "";
@@ -366,10 +339,7 @@ public class DriverListFragment extends Fragment {
         return -1;
     }
 
-    /**
-     * Hàm tiện ích lấy string an toàn từ cursor theo index:
-     * - trả "" khi column null hoặc lỗi
-     */
+    // Hàm tiện ích lấy string an toàn từ cursor theo index:
     private String safeGet(Cursor c, int index) {
         if (c == null) return "";
         try {
@@ -400,7 +370,6 @@ public class DriverListFragment extends Fragment {
                 DriverListModel d = driverListFull.get(i);
                 String name = d.getName() == null ? "" : d.getName().toLowerCase();
                 String loc = d.getLocation() == null ? "" : d.getLocation().toLowerCase();
-                // tìm theo tên hoặc location (bạn có thể thêm tìm theo số điện thoại, cccd nếu bổ sung vào model)
                 if (name.contains(q) || loc.contains(q)) {
                     driverList.add(d);
                     driverIds.add(driverIdsFull.get(i));
@@ -408,7 +377,6 @@ public class DriverListFragment extends Fragment {
             }
         }
 
-        // Cập nhật adapter
         if (driverAdapter != null) driverAdapter.notifyDataSetChanged();
     }
 

@@ -1,9 +1,9 @@
 package com.example.tttn_hoangdaivms.VehicleDetail;
 
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,7 +19,7 @@ import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.R;
 
 public class VehicleDetailFragment extends Fragment {
-
+    private static final String TAG = "VehicleDetailFragment";
     public static final String ARG_MA_XE = "MaXe";
 
     private TextView tvDriverName, tvStatus, tvInspectionDate;
@@ -29,31 +29,28 @@ public class VehicleDetailFragment extends Fragment {
     private ImageView ivClose, ivEdit, ivCover;
     private Database database;
 
-    public VehicleDetailFragment() { /* required empty ctor */ }
+    public VehicleDetailFragment() { /* required */ }
 
-    /**
-     * Tạo instance fragment với MaXe (int)
-     */
     public static VehicleDetailFragment newInstance(int maXe) {
-        VehicleDetailFragment fragment = new VehicleDetailFragment();
-        Bundle args = new Bundle();
-        args.putInt(ARG_MA_XE, maXe);
-        fragment.setArguments(args);
-        return fragment;
+        VehicleDetailFragment f = new VehicleDetailFragment();
+        Bundle b = new Bundle();
+        b.putInt(ARG_MA_XE, maXe);
+        f.setArguments(b);
+        return f;
     }
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+    public android.view.View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                                          @Nullable android.os.Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_vehicle_detail, container, false);
     }
 
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull android.view.View view, @Nullable android.os.Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // find views
+        // Find views
         tvDriverName = view.findViewById(R.id.tvDriverName);
         tvStatus = view.findViewById(R.id.tvStatus);
         tvInspectionDate = view.findViewById(R.id.tvInspectionDate);
@@ -79,169 +76,193 @@ public class VehicleDetailFragment extends Fragment {
 
         database = new Database(requireContext());
 
-        // close button: pop back stack
         ivClose.setOnClickListener(v -> {
             if (getActivity() != null) getActivity().getSupportFragmentManager().popBackStack();
         });
 
-        // Lấy MaXe (hỗ trợ int trong Bundle). Nếu không có -> báo lỗi.
-        Bundle args = getArguments();
+        // Get MaXe
         int maXe = -1;
-        if (args != null) {
-            // ưu tiên lấy int
-            if (args.containsKey(ARG_MA_XE)) {
-                try {
-                    maXe = args.getInt(ARG_MA_XE, -1);
-                } catch (Exception ignored) { maXe = -1; }
-            } else {
-                // fallback: có thể người gọi truyền string, thử parse
-                String s = args.getString(ARG_MA_XE, null);
-                if (!TextUtils.isEmpty(s)) {
-                    try {
-                        maXe = Integer.parseInt(s);
-                    } catch (NumberFormatException ignored) { maXe = -1; }
-                }
-            }
+        Bundle args = getArguments();
+        if (args != null && args.containsKey(ARG_MA_XE)) {
+            maXe = args.getInt(ARG_MA_XE, -1);
         }
-
         if (maXe == -1) {
             Toast.makeText(requireContext(), "ID xe không hợp lệ", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        loadVehicleDetail(maXe);
+        final int finalMaXe = maXe;
+        // Run DB operations in background thread
+        new Thread(() -> loadVehicleDetailBackground(finalMaXe)).start();
+//        View bottomNav = requireActivity().findViewById(R.id.bottomNavigation);
+//        if (bottomNav != null) {
+//            bottomNav.setVisibility(View.GONE);
+//        }
     }
 
-    /**
-     * Helper: lấy string an toàn từ cursor, trả null nếu cột không tồn tại hoặc giá trị null
-     */
-    private String getStringSafe(Cursor c, String colName) {
+    // Helper lấy string an toàn (cursor local only)
+    private String getStringSafeLocal(Cursor c, String col) {
         if (c == null || c.isClosed()) return null;
-        int idx = c.getColumnIndex(colName);
+        int idx = c.getColumnIndex(col);
         if (idx == -1) return null;
         return c.isNull(idx) ? null : c.getString(idx);
     }
 
-    /**
-     * Helper: lấy int an toàn từ cursor, trả -1 nếu cột không tồn tại hoặc null
-     */
-    private int getIntSafe(Cursor c, String colName) {
+    private int getIntSafeLocal(Cursor c, String col) {
         if (c == null || c.isClosed()) return -1;
-        int idx = c.getColumnIndex(colName);
+        int idx = c.getColumnIndex(col);
         if (idx == -1) return -1;
         return c.isNull(idx) ? -1 : c.getInt(idx);
     }
 
-    private void loadVehicleDetail(int maXe) {
-        SQLiteDatabase db = database.getReadableDatabase();
+    /**
+     * Đọc toàn bộ dữ liệu cần thiết trong background thread, đóng Cursor ngay,
+     * sau đó truyền các giá trị thuần (String/int) lên UI thread để cập nhật.
+     */
+    private void loadVehicleDetailBackground(int maXe) {
         Cursor cXe = null;
-        Cursor cNguoiDung = null;
         Cursor cBaoTri = null;
         Cursor cBaoHiem = null;
+        // Variables to hold values read from DB
+        int maNguoiDung = -1;
+        String bienSo = null, loaiXe = null, hangSX = null, mauSac = null, soHieu = null;
+        String hoTen = null, trangThai = null;
+        String ngayGanNhat = null, noiDung = null, donVi = null;
+        String soHD = null, ngayBD = null, ngayKT = null, congTy = null;
 
         try {
-            // 1) Lấy thông tin xe (và MaNguoiDung)
-            cXe = db.rawQuery("SELECT MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu FROM Xe WHERE MaXe = ?",
-                    new String[]{String.valueOf(maXe)});
-
-            if (cXe != null && cXe.moveToFirst()) {
-                int maNguoiDung = getIntSafe(cXe, "MaNguoiDung");
-                String bienSo = getStringSafe(cXe, "BienSo");
-                String loaiXe = getStringSafe(cXe, "LoaiXe");
-                String hangSX = getStringSafe(cXe, "HangSX");
-                String mauSac = getStringSafe(cXe, "MauSac");
-                String soHieu = getStringSafe(cXe, "SoHieu");
-
-                // set vehicle fields (null-safe)
-                tvBienSo.setText(!TextUtils.isEmpty(bienSo) ? bienSo : "-");
-                tvLoaiXe.setText(!TextUtils.isEmpty(loaiXe) ? loaiXe : "-");
-                tvHangSX.setText(!TextUtils.isEmpty(hangSX) ? hangSX : "-");
-                tvMauSac.setText(!TextUtils.isEmpty(mauSac) ? mauSac : "-");
-                tvSoHieu.setText(!TextUtils.isEmpty(soHieu) ? soHieu : "-");
-
-                // 2) Lấy tên tài xế + trạng thái từ NguoiDung theo MaNguoiDung (nếu tồn tại)
-                if (maNguoiDung != -1) {
-                    cNguoiDung = db.rawQuery("SELECT HoTen, TrangThai FROM NguoiDung WHERE MaNguoiDung = ?",
-                            new String[]{String.valueOf(maNguoiDung)});
-                    if (cNguoiDung != null && cNguoiDung.moveToFirst()) {
-                        String hoTen = getStringSafe(cNguoiDung, "HoTen");
-                        String trangThai = getStringSafe(cNguoiDung, "TrangThai");
-                        tvDriverName.setText(!TextUtils.isEmpty(hoTen) ? hoTen : "Không rõ");
-                        tvStatus.setText(!TextUtils.isEmpty(trangThai) ? trangThai : "-");
-                    } else {
-                        tvDriverName.setText("Không rõ");
-                        tvStatus.setText("-");
-                    }
-                } else {
-                    tvDriverName.setText("Không rõ");
-                    tvStatus.setText("-");
-                }
-
-                // 3) Lấy thông tin bảo trì mới nhất cho xe (BaoTri) -> ngày kiểm tra
-                cBaoTri = db.rawQuery("SELECT NgayGanNhat, NoiDung, DonVi FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC LIMIT 1",
+            // 1) Lấy thông tin xe
+            try {
+                // try helper if exists
+                cXe = database.getXeById(maXe);
+            } catch (Exception e) {
+                cXe = database.getReadableDatabase().rawQuery(
+                        "SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu FROM Xe WHERE MaXe = ?",
                         new String[]{String.valueOf(maXe)});
-                if (cBaoTri != null && cBaoTri.moveToFirst()) {
-                    String ngayGanNhat = getStringSafe(cBaoTri, "NgayGanNhat");
-                    String noiDung = getStringSafe(cBaoTri, "NoiDung");
-                    String donVi = getStringSafe(cBaoTri, "DonVi");
-
-                    tvInspectionDate.setText(!TextUtils.isEmpty(ngayGanNhat) ? ngayGanNhat : "-");
-                    tvNgayGanNhatBT.setText(!TextUtils.isEmpty(ngayGanNhat) ? ngayGanNhat : "-");
-                    tvNoiDungBT.setText(!TextUtils.isEmpty(noiDung) ? noiDung : "-");
-                    tvDonViBT.setText(!TextUtils.isEmpty(donVi) ? donVi : "-");
-                } else {
-                    tvInspectionDate.setText("Chưa có");
-                    tvNgayGanNhatBT.setText("Chưa có");
-                    tvNoiDungBT.setText("-");
-                    tvDonViBT.setText("-");
-                }
-
-                // 4) Lấy thông tin bảo hiểm (nếu có) theo MaTaiXe = MaNguoiDung
-                if (maNguoiDung != -1) {
-                    cBaoHiem = db.rawQuery("SELECT SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
-                            new String[]{String.valueOf(maNguoiDung)});
-                    if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
-                        String soHD = getStringSafe(cBaoHiem, "SoHD");
-                        String ngayBatDau = getStringSafe(cBaoHiem, "NgayBatDau");
-                        String ngayKetThuc = getStringSafe(cBaoHiem, "NgayKetThuc");
-                        String congTy = getStringSafe(cBaoHiem, "CongTy");
-
-                        tvSoHD.setText(!TextUtils.isEmpty(soHD) ? soHD : "-");
-                        tvNgayBatDau.setText(!TextUtils.isEmpty(ngayBatDau) ? ngayBatDau : "-");
-                        tvNgayKetThuc.setText(!TextUtils.isEmpty(ngayKetThuc) ? ngayKetThuc : "-");
-                        tvCongTy.setText(!TextUtils.isEmpty(congTy) ? congTy : "-");
-                    } else {
-                        tvSoHD.setText("-");
-                        tvNgayBatDau.setText("-");
-                        tvNgayKetThuc.setText("-");
-                        tvCongTy.setText("-");
-                    }
-                } else {
-                    tvSoHD.setText("-");
-                    tvNgayBatDau.setText("-");
-                    tvNgayKetThuc.setText("-");
-                    tvCongTy.setText("-");
-                }
-
-            } else {
-                // không tìm thấy xe
-                Toast.makeText(requireContext(), "Không tìm thấy thông tin xe (MaXe=" + maXe + ")", Toast.LENGTH_SHORT).show();
             }
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(requireContext(), "Lỗi khi tải dữ liệu: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            if (cXe != null && cXe.moveToFirst()) {
+                maNguoiDung = getIntSafeLocal(cXe, "MaNguoiDung");
+                bienSo = getStringSafeLocal(cXe, "BienSo");
+                loaiXe = getStringSafeLocal(cXe, "LoaiXe");
+                hangSX = getStringSafeLocal(cXe, "HangSX");
+                mauSac = getStringSafeLocal(cXe, "MauSac");
+                soHieu = getStringSafeLocal(cXe, "SoHieu");
+            } else {
+                // no vehicle found -> update UI and return
+                requireActivity().runOnUiThread(() ->
+                        Toast.makeText(requireContext(), "Không tìm thấy thông tin xe (MaXe=" + maXe + ")", Toast.LENGTH_SHORT).show()
+                );
+                return;
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "Error reading Xe", ex);
+            requireActivity().runOnUiThread(() ->
+                    Toast.makeText(requireContext(), "Lỗi khi tải thông tin xe: " + ex.getMessage(), Toast.LENGTH_LONG).show()
+            );
+            return;
         } finally {
-            if (cXe != null && !cXe.isClosed()) cXe.close();
-            if (cNguoiDung != null && !cNguoiDung.isClosed()) cNguoiDung.close();
-            if (cBaoTri != null && !cBaoTri.isClosed()) cBaoTri.close();
-            if (cBaoHiem != null && !cBaoHiem.isClosed()) cBaoHiem.close();
-            // Không đóng db ở đây vì Database helper quản lý connection lifecycle
+            try { if (cXe != null && !cXe.isClosed()) cXe.close(); } catch (Exception ignored) {}
         }
-    }
 
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
+        // 2) Lấy thông tin người (nếu có)
+        if (maNguoiDung != -1) {
+            Cursor cNguoi = null;
+            try {
+                cNguoi = database.getReadableDatabase().rawQuery(
+                        "SELECT HoTen, TrangThai FROM NguoiDung WHERE MaNguoiDung = ?",
+                        new String[]{String.valueOf(maNguoiDung)});
+                if (cNguoi != null && cNguoi.moveToFirst()) {
+                    hoTen = getStringSafeLocal(cNguoi, "HoTen");
+                    trangThai = getStringSafeLocal(cNguoi, "TrangThai");
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Error reading NguoiDung", ex);
+            } finally {
+                try { if (cNguoi != null && !cNguoi.isClosed()) cNguoi.close(); } catch (Exception ignored) {}
+            }
+        }
+
+        // 3) Lấy BaoTri mới nhất cho MaXe
+        try {
+            try {
+                cBaoTri = database.getLatestBaoTriByMaXe(maXe);
+            } catch (Exception e) {
+                cBaoTri = database.getReadableDatabase().rawQuery(
+                        "SELECT NgayGanNhat, NoiDung, DonVi FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC, MaBaoTri DESC LIMIT 1",
+                        new String[]{String.valueOf(maXe)});
+            }
+            if (cBaoTri != null && cBaoTri.moveToFirst()) {
+                ngayGanNhat = getStringSafeLocal(cBaoTri, "NgayGanNhat");
+                noiDung = getStringSafeLocal(cBaoTri, "NoiDung");
+                donVi = getStringSafeLocal(cBaoTri, "DonVi");
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "Error reading BaoTri", ex);
+        } finally {
+            try { if (cBaoTri != null && !cBaoTri.isClosed()) cBaoTri.close(); } catch (Exception ignored) {}
+        }
+
+        // 4) Lấy BaoHiem mới nhất theo MaTaiXe = MaNguoiDung (nếu có)
+        if (maNguoiDung != -1) {
+            try {
+                try {
+                    cBaoHiem = database.getLatestBaoHiemByMaTaiXe(maNguoiDung);
+                } catch (Exception e) {
+                    cBaoHiem = database.getReadableDatabase().rawQuery(
+                            "SELECT SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                            new String[]{String.valueOf(maNguoiDung)});
+                }
+                if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
+                    soHD = getStringSafeLocal(cBaoHiem, "SoHD");
+                    ngayBD = getStringSafeLocal(cBaoHiem, "NgayBatDau");
+                    ngayKT = getStringSafeLocal(cBaoHiem, "NgayKetThuc");
+                    congTy = getStringSafeLocal(cBaoHiem, "CongTy");
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Error reading BaoHiem", ex);
+            } finally {
+                try { if (cBaoHiem != null && !cBaoHiem.isClosed()) cBaoHiem.close(); } catch (Exception ignored) {}
+            }
+        }
+
+        // Tất cả dữ liệu đã được đọc và cursors đã đóng — giờ cập nhật UI bằng các biến thuần
+        final String finalBienSo = bienSo, finalLoaiXe = loaiXe, finalHangSX = hangSX,
+                finalMauSac = mauSac, finalSoHieu = soHieu;
+        final String finalHoTen = hoTen, finalTrangThai = trangThai;
+        final String finalNgayGanNhat = ngayGanNhat, finalNoiDung = noiDung, finalDonVi = donVi;
+        final String finalSoHD = soHD, finalNgayBD = ngayBD, finalNgayKT = ngayKT, finalCongTy = congTy;
+
+        requireActivity().runOnUiThread(() -> {
+            // set vehicle info
+            tvBienSo.setText(!TextUtils.isEmpty(finalBienSo) ? finalBienSo : "-");
+            tvLoaiXe.setText(!TextUtils.isEmpty(finalLoaiXe) ? finalLoaiXe : "-");
+            tvHangSX.setText(!TextUtils.isEmpty(finalHangSX) ? finalHangSX : "-");
+            tvMauSac.setText(!TextUtils.isEmpty(finalMauSac) ? finalMauSac : "-");
+            tvSoHieu.setText(!TextUtils.isEmpty(finalSoHieu) ? finalSoHieu : "-");
+
+            // set nguoi dung
+            tvDriverName.setText(!TextUtils.isEmpty(finalHoTen) ? finalHoTen : "Không rõ");
+            tvStatus.setText(!TextUtils.isEmpty(finalTrangThai) ? finalTrangThai : "-");
+
+            // set bao tri
+            if (!TextUtils.isEmpty(finalNgayGanNhat) || !TextUtils.isEmpty(finalNoiDung) || !TextUtils.isEmpty(finalDonVi)) {
+                tvInspectionDate.setText(!TextUtils.isEmpty(finalNgayGanNhat) ? finalNgayGanNhat : "-");
+                tvNgayGanNhatBT.setText(!TextUtils.isEmpty(finalNgayGanNhat) ? finalNgayGanNhat : "-");
+                tvNoiDungBT.setText(!TextUtils.isEmpty(finalNoiDung) ? finalNoiDung : "-");
+                tvDonViBT.setText(!TextUtils.isEmpty(finalDonVi) ? finalDonVi : "-");
+            } else {
+                tvInspectionDate.setText("Chưa có");
+                tvNgayGanNhatBT.setText("Chưa có");
+                tvNoiDungBT.setText("-");
+                tvDonViBT.setText("-");
+            }
+
+            // set bao hiem
+            tvSoHD.setText(!TextUtils.isEmpty(finalSoHD) ? finalSoHD : "-");
+            tvNgayBatDau.setText(!TextUtils.isEmpty(finalNgayBD) ? finalNgayBD : "-");
+            tvNgayKetThuc.setText(!TextUtils.isEmpty(finalNgayKT) ? finalNgayKT : "-");
+            tvCongTy.setText(!TextUtils.isEmpty(finalCongTy) ? finalCongTy : "-");
+        });
     }
 }

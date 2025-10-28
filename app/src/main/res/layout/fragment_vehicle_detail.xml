@@ -25,7 +25,6 @@
         android:layout_height="44dp"
         android:padding="8dp"
         android:src="@drawable/ic_back"
-        android:contentDescription="close"
         app:tint="#0B1A2B"
         app:layout_constraintTop_toTopOf="@id/ivCover"
         app:layout_constraintStart_toStartOf="parent"
@@ -36,16 +35,15 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/cardMain"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginStart="0dp"
         android:layout_marginEnd="0dp"
-        app:cardCornerRadius="20dp"
         app:cardElevation="6dp"
-        app:cardUseCompatPadding="true"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="200dp">
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginTop="170dp">
 
     <ScrollView
         android:id="@+id/scrollRoot"
@@ -330,7 +328,6 @@
                 </LinearLayout>
             </LinearLayout>
         </HorizontalScrollView>
-
         <!-- NEW SECTION: Thông tin bảo hiểm (BaoHiem) -->
         <TextView
             android:id="@+id/label_insurance"
@@ -478,7 +475,6 @@
                 </LinearLayout>
             </LinearLayout>
         </HorizontalScrollView>
-
         <!-- UPDATED SECTION: Thông tin bảo trì (BaoTri) -->
         <TextView
             android:id="@+id/label_maintenance"
@@ -533,9 +529,9 @@
                         android:textSize="12sp"/>
                 </LinearLayout>
 
-                <!-- Nội dung (BaoTri.NoiDung) -->
+                <!-- Nội dung (BaoTri.NoiDung)   -->
                 <LinearLayout
-                    android:layout_width="240dp"
+                    android:layout_width="136dp"
                     android:layout_height="140dp"
                     android:orientation="vertical"
                     android:layout_marginEnd="12dp"
@@ -595,6 +591,8 @@
                 </LinearLayout>
             </LinearLayout>
         </HorizontalScrollView>
+
+
     </LinearLayout>
 </ScrollView>
     </androidx.cardview.widget.CardView>

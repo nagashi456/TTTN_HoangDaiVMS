@@ -395,6 +395,29 @@ public class Database extends SQLiteOpenHelper {
             if (cursor != null) cursor.close();
         }
     }
+    public Cursor getXeById(int maXe) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.rawQuery("SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu FROM Xe WHERE MaXe = ?",
+                new String[]{String.valueOf(maXe)});
+    }
 
+    /**
+     * Lấy Cursor bảo trì mới nhất cho MaXe
+     */
+    public Cursor getLatestBaoTriByMaXe(int maXe) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        // ORDER BY MaBaoTri DESC đảm bảo lấy bản ghi mới nhất nếu format ngày không chuẩn
+        return db.rawQuery("SELECT MaBaoTri, NgayGanNhat, NoiDung, DonVi FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC, MaBaoTri DESC LIMIT 1",
+                new String[]{String.valueOf(maXe)});
+    }
+
+    /**
+     * Lấy Cursor bảo hiểm mới nhất cho MaTaiXe (MaNguoiDung)
+     */
+    public Cursor getLatestBaoHiemByMaTaiXe(int maTaiXe) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.rawQuery("SELECT MaBaoHiem, SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                new String[]{String.valueOf(maTaiXe)});
+    }
     // Các helper nhỏ (nếu cần bạn có thể thêm nhiều hàm truy vấn tiện ích)
 }
