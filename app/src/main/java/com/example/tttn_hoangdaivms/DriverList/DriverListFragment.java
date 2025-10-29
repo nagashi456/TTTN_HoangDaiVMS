@@ -169,15 +169,82 @@ public class DriverListFragment extends Fragment {
         });
 
         // ===== Vehicle adapter: listener nhận maXe (int)
-        vehicleAdapter = new VehicleListAdapter(vehicleList, maXe -> {
-            // Hiện toast (debug) và mở VehicleDetailFragment
-            Toast.makeText(requireContext(), "Mã xe: " + maXe, Toast.LENGTH_SHORT).show();
-            VehicleDetailFragment frag = VehicleDetailFragment.newInstance(maXe);
-            requireActivity().getSupportFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.containerMain, frag)
-                    .addToBackStack(null)
-                    .commit();
+// ===== Vehicle adapter: listener nhận VehicleListModel và xử lý delete với confirm dialog
+        vehicleAdapter = new VehicleListAdapter(vehicleList, new VehicleListAdapter.OnItemActionListener() {
+            @Override
+            public void onItemClick(int maXe) {
+                // mở chi tiết xe
+                VehicleDetailFragment frag = VehicleDetailFragment.newInstance(maXe);
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, frag)
+                        .addToBackStack(null)
+                        .commit();
+            }
+
+            @Override
+            public void onDeleteRequested(int maXe, int position) {
+                // Hiển thị dialog xác nhận trước khi xóa
+                new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Xóa xe")
+                        .setMessage("Bạn có chắc muốn xóa xe ?")
+                        .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
+                        .setPositiveButton("Xóa", (dialog, which) -> {
+                            // Thực hiện xóa trong background thread để không block UI
+                            new Thread(() -> {
+                                SQLiteDatabase db = null;
+                                try {
+                                    db = dbHelper.getWritableDatabase();
+                                    int rows = db.delete("Xe", "MaXe = ?", new String[]{String.valueOf(maXe)});
+                                    if (rows > 0) {
+                                        // Cập nhật UI trên main thread
+                                        requireActivity().runOnUiThread(() -> {
+                                            int removeIndex = -1;
+                                            // ưu tiên dùng position nếu hợp lệ và khớp
+                                            if (position >= 0 && position < vehicleList.size() && vehicleList.get(position).getMaXe() == maXe) {
+                                                removeIndex = position;
+                                            } else {
+                                                // fallback: tìm index theo maXe
+                                                for (int i = 0; i < vehicleList.size(); i++) {
+                                                    if (vehicleList.get(i).getMaXe() == maXe) { removeIndex = i; break; }
+                                                }
+                                            }
+
+                                            if (removeIndex >= 0) {
+                                                // xóa khỏi vehicleListFull nếu tồn tại
+                                                for (int i = 0; i < vehicleListFull.size(); i++) {
+                                                    if (vehicleListFull.get(i).getMaXe() == maXe) {
+                                                        vehicleListFull.remove(i);
+                                                        break;
+                                                    }
+                                                }
+                                                vehicleAdapter.removeAt(removeIndex);
+                                                Toast.makeText(requireContext(), "Xóa xe thành công.", Toast.LENGTH_SHORT).show();
+                                            } else {
+                                                // Nếu không tìm thấy vị trí (vd: do đang filter), rebuild danh sách từ vehicleListFull
+                                                vehicleList.clear();
+                                                vehicleList.addAll(vehicleListFull);
+                                                vehicleAdapter.notifyDataSetChanged();
+                                                Toast.makeText(requireContext(), "Xóa thành công (cập nhật danh sách).", Toast.LENGTH_SHORT).show();
+                                            }
+                                        });
+                                    } else {
+                                        requireActivity().runOnUiThread(() ->
+                                                Toast.makeText(requireContext(), "Xóa thất bại.", Toast.LENGTH_SHORT).show()
+                                        );
+                                    }
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                    requireActivity().runOnUiThread(() ->
+                                            Toast.makeText(requireContext(), "Lỗi khi xóa: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                                    );
+                                } finally {
+                                    if (db != null) db.close();
+                                }
+                            }).start();
+                        })
+                        .show();
+            }
         });
 
         // Mặc định hiển thị danh sách tài xế

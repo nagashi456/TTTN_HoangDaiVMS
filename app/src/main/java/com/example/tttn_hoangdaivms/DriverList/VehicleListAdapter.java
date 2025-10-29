@@ -18,29 +18,31 @@ import java.util.List;
  * VehicleListAdapter - thiết kế theo style của DriverAdapter:
  * - An toàn (null-check)
  * - Có methods updateList/addItem/removeItem
- * - Listener nhận MaXe (int)
+ * - Listener nhận MaXe (int) và xử lý xóa giống DriverAdapter
  */
 public class VehicleListAdapter extends RecyclerView.Adapter<VehicleListAdapter.VehicleViewHolder> {
 
     /**
-     * Listener: nhận MaXe (int).
+     * Listener: nhận sự kiện click và delete.
+     * Tương tự DriverAdapter, cung cấp vị trí để fragment/Activity có thể thao tác danh sách.
      */
-    public interface OnItemClickListener {
+    public interface OnItemActionListener {
         void onItemClick(int maXe);
+        void onDeleteRequested(int maXe, int position);
     }
 
     private final List<VehicleListModel> vehicleList;
-    private OnItemClickListener listener;
+    private OnItemActionListener listener;
 
     // constructor mặc định
-    public VehicleListAdapter(List<VehicleListModel> vehicleList, OnItemClickListener listener) {
+    public VehicleListAdapter(List<VehicleListModel> vehicleList, OnItemActionListener listener) {
         this.vehicleList = vehicleList != null ? new ArrayList<>(vehicleList) : new ArrayList<>();
         this.listener = listener;
         setHasStableIds(false); // nếu bạn muốn stable ids, override getItemId & set true
     }
 
     // thay đổi listener sau khi khởi tạo (tuỳ chọn)
-    public void setOnItemClickListener(OnItemClickListener listener) {
+    public void setOnItemActionListener(OnItemActionListener listener) {
         this.listener = listener;
     }
 
@@ -63,6 +65,11 @@ public class VehicleListAdapter extends RecyclerView.Adapter<VehicleListAdapter.
         if (position < 0 || position >= vehicleList.size()) return;
         vehicleList.remove(position);
         notifyItemRemoved(position);
+    }
+
+    // alias: removeAt giống driverAdapter
+    public void removeAt(int position) {
+        removeItem(position);
     }
 
     @NonNull
@@ -91,10 +98,8 @@ public class VehicleListAdapter extends RecyclerView.Adapter<VehicleListAdapter.
         if (imgRes != 0) {
             holder.ivImage.setImageResource(imgRes);
         } else {
-            // Sử dụng android built-in drawable như fallback để tránh thiếu resource:
             holder.ivImage.setImageResource(android.R.drawable.ic_menu_gallery);
-            // Nếu bạn đã tạo vector ic_vehicle_placeholder, đổi thành:
-            // holder.ivImage.setImageResource(R.drawable.ic_vehicle_placeholder);
+            // hoặc thay bằng R.drawable.ic_vehicle_placeholder nếu bạn đã có
         }
 
         // Accessibility
@@ -108,7 +113,20 @@ public class VehicleListAdapter extends RecyclerView.Adapter<VehicleListAdapter.
                 listener.onItemClick(maXe);
             } catch (Exception e) {
                 e.printStackTrace();
-                // fallback: không gọi listener nếu không có maXe hợp lệ
+            }
+        });
+
+        // Delete icon click: gọi onDeleteRequested với maXe + position
+        holder.icDelete.setOnClickListener(v -> {
+            if (listener == null) return;
+            try {
+                int maXe = model.getMaXe();
+                int pos = holder.getAdapterPosition();
+                // adapter position có thể = RecyclerView.NO_POSITION
+                if (pos == RecyclerView.NO_POSITION) pos = position;
+                listener.onDeleteRequested(maXe, pos);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
@@ -129,15 +147,24 @@ public class VehicleListAdapter extends RecyclerView.Adapter<VehicleListAdapter.
         }
     }
 
+    // expose underlying list (read-only) nếu cần
+    public List<VehicleListModel> getVehicleList() {
+        return vehicleList;
+    }
+
     static class VehicleViewHolder extends RecyclerView.ViewHolder {
         ImageView ivImage;
         TextView tvName, tvPlate;
+        ImageView icDelete;
 
         VehicleViewHolder(@NonNull View itemView) {
             super(itemView);
             ivImage = itemView.findViewById(R.id.vehicleImage);
             tvName = itemView.findViewById(R.id.vehicleName);
             tvPlate = itemView.findViewById(R.id.vehiclePlate);
+            // !!! đảm bảo car_listitem.xml có view này
+            icDelete = itemView.findViewById(R.id.deleteIcon);
+            // nếu icDelete không tồn tại, hãy thêm ImageView vào layout với id tương ứng
         }
     }
 }
