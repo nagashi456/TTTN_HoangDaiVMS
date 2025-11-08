@@ -71,7 +71,6 @@ public class VehicleDetailFragment extends Fragment {
         tvDonViBT = view.findViewById(R.id.tvDonViBT);
 
         ivClose = view.findViewById(R.id.ivClose);
-        ivEdit = view.findViewById(R.id.ivEdit);
         ivCover = view.findViewById(R.id.ivCover);
 
         database = new Database(requireContext());

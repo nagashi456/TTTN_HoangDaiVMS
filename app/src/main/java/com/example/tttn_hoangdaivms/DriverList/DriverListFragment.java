@@ -106,7 +106,23 @@ public class DriverListFragment extends Fragment {
 
             @Override
             public void onEditRequested(DriverListModel driver, int position, String id) {
-                Toast.makeText(requireContext(), "Chức năng sửa tạm thời chưa có.", Toast.LENGTH_SHORT).show();
+                // Mở màn chỉnh sửa (same as click)
+                if (id == null || id.trim().isEmpty()) {
+                    int pos = findIndexByNameAndLocation(driver.getName(), driver.getLocation());
+                    if (pos >= 0 && pos < driverIds.size()) id = driverIds.get(pos);
+                    position = pos;
+                }
+                if (id != null && !id.trim().isEmpty()) {
+                    com.example.tttn_hoangdaivms.EditDriver.EditDriverFragment frag =
+                            com.example.tttn_hoangdaivms.EditDriver.EditDriverFragment.newInstance(id);
+                    requireActivity().getSupportFragmentManager()
+                            .beginTransaction()
+                            .replace(R.id.containerMain, frag)
+                            .addToBackStack(null)
+                            .commit();
+                } else {
+                    Toast.makeText(requireContext(), "Không tìm thấy ID để sửa.", Toast.LENGTH_SHORT).show();
+                }
             }
 
             @Override
@@ -169,7 +185,7 @@ public class DriverListFragment extends Fragment {
         });
 
         // ===== Vehicle adapter: listener nhận maXe (int)
-// ===== Vehicle adapter: listener nhận VehicleListModel và xử lý delete với confirm dialog
+// ===== Vehicle adapter: listener nhận VehicleListModel và xử lý delete/edit với confirm dialog
         vehicleAdapter = new VehicleListAdapter(vehicleList, new VehicleListAdapter.OnItemActionListener() {
             @Override
             public void onItemClick(int maXe) {
@@ -183,16 +199,28 @@ public class DriverListFragment extends Fragment {
             }
 
             @Override
+            public void onEditRequested(int maXe, int position) {
+                // mở trang edit (EditVehicleFragment)
+                com.example.tttn_hoangdaivms.EditVehicle.EditVehicleFragment editFrag =
+                        com.example.tttn_hoangdaivms.EditVehicle.EditVehicleFragment.newInstance(maXe);
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, editFrag)
+                        .addToBackStack(null)
+                        .commit();
+            }
+
+            @Override
             public void onDeleteRequested(int maXe, int position) {
                 // Hiển thị dialog xác nhận trước khi xóa
                 new androidx.appcompat.app.AlertDialog.Builder(requireContext())
                         .setTitle("Xóa xe")
-                        .setMessage("Bạn có chắc muốn xóa xe ?")
+                        .setMessage("Bạn có chắc muốn xóa xe này?")
                         .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                         .setPositiveButton("Xóa", (dialog, which) -> {
                             // Thực hiện xóa trong background thread để không block UI
                             new Thread(() -> {
-                                SQLiteDatabase db = null;
+                                android.database.sqlite.SQLiteDatabase db = null;
                                 try {
                                     db = dbHelper.getWritableDatabase();
                                     int rows = db.delete("Xe", "MaXe = ?", new String[]{String.valueOf(maXe)});
@@ -212,19 +240,23 @@ public class DriverListFragment extends Fragment {
 
                                             if (removeIndex >= 0) {
                                                 // xóa khỏi vehicleListFull nếu tồn tại
-                                                for (int i = 0; i < vehicleListFull.size(); i++) {
-                                                    if (vehicleListFull.get(i).getMaXe() == maXe) {
-                                                        vehicleListFull.remove(i);
-                                                        break;
+                                                if (vehicleListFull != null) {
+                                                    for (int i = 0; i < vehicleListFull.size(); i++) {
+                                                        if (vehicleListFull.get(i).getMaXe() == maXe) {
+                                                            vehicleListFull.remove(i);
+                                                            break;
+                                                        }
                                                     }
                                                 }
                                                 vehicleAdapter.removeAt(removeIndex);
                                                 Toast.makeText(requireContext(), "Xóa xe thành công.", Toast.LENGTH_SHORT).show();
                                             } else {
                                                 // Nếu không tìm thấy vị trí (vd: do đang filter), rebuild danh sách từ vehicleListFull
-                                                vehicleList.clear();
-                                                vehicleList.addAll(vehicleListFull);
-                                                vehicleAdapter.notifyDataSetChanged();
+                                                if (vehicleListFull != null) {
+                                                    vehicleList.clear();
+                                                    vehicleList.addAll(vehicleListFull);
+                                                    vehicleAdapter.updateList(vehicleList);
+                                                }
                                                 Toast.makeText(requireContext(), "Xóa thành công (cập nhật danh sách).", Toast.LENGTH_SHORT).show();
                                             }
                                         });
@@ -246,6 +278,7 @@ public class DriverListFragment extends Fragment {
                         .show();
             }
         });
+
 
         // Mặc định hiển thị danh sách tài xế
         driverRecyclerView.setAdapter(driverAdapter);

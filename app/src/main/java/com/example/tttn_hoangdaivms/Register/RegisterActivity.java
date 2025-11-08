@@ -231,9 +231,14 @@ public class RegisterActivity extends AppCompatActivity {
 
         boolean success = dbHelper.insertNguoiDung(email, pass, name, birthday, gender, cccd, phone, vaiTro, trangThai);
         if (success) {
-            Toast.makeText(this, "Đăng ký thành công, vui lòng chờ duyệt!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Đăng ký thành cô  ng, vui lòng chờ duyệt!", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(this, LoginActivity.class));
             finish();
+            tabLogin.setBackgroundResource(R.drawable.bg_tab_active);
+            tabLogin.setTextColor(Color.parseColor("#1E63E9"));
+
+            tabRegister.setBackgroundResource(0);
+            tabRegister.setTextColor(Color.parseColor("#A0A0A0"));
         } else {
             // email đã tồn tại -> hiển thị lỗi bên dưới email
             setFieldError(edtEmail, "Email đã tồn tại hoặc lỗi khi thêm dữ liệu");

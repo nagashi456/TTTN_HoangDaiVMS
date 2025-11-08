@@ -141,15 +141,6 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Edit icon -->
-        <ImageView
-            android:id="@+id/ivEdit"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:src="@drawable/ic_edit"
-            android:contentDescription="edit"
-            android:layout_marginTop="8dp"
-            android:layout_gravity="end"/>
         <!-- NEW SECTION: Thông tin xe (Xe) -->
         <TextView
             android:id="@+id/label_vehicle"
