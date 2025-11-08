@@ -385,7 +385,7 @@ public class DriverDetail extends Fragment {
 
             // BangCap (mới nhất)
             c = db.rawQuery(
-                    "SELECT Loai, NgayCap, NgayHetHan, NoiCap FROM BangCap WHERE MaTaiXe = ? ORDER BY MaBangCap DESC LIMIT 1",
+                    "SELECT Loai, NgayCap, NgayHetHan, NoiCap FROM BangCap WHERE MaNguoiDung = ? ORDER BY MaBangCap DESC LIMIT 1",
                     new String[]{ idStr }
             );
             if (c != null && c.moveToFirst()) {
@@ -487,7 +487,7 @@ public class DriverDetail extends Fragment {
             c = db.rawQuery(
                     "SELECT BC.Loai, BC.NgayCap, BC.NgayHetHan, BC.NoiCap " +
                             "FROM BangCap BC " +
-                            "JOIN NguoiDung ND ON BC.MaTaiXe = ND.MaNguoiDung " +
+                            "JOIN NguoiDung ND ON BC.MaNguoiDung = ND.MaNguoiDung " +
                             "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE TK.Email = ? " +
                             "ORDER BY BC.MaBangCap DESC LIMIT 1",

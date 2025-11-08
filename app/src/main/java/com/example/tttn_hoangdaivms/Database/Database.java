@@ -10,21 +10,14 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 
 /**
- * Database helper - updated to match schema:
- * TaiKhoan (MaTaiKhoan, Email, MatKhau)
- * NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai)
- * SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan)
- * BangCap (MaBangCap, MaTaiXe, Loai, NgayCap, NgayHetHan, NoiCap, TinhTrang, GiayPhep)
- * BaoHiem (MaBaoHiem, MaTaiXe, SoHD, NgayBatDau, NgayKetThuc, CongTy)
- * Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu)
- * BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi)
+ * Database helper - updated to match new schema and include SucKhoe table.
  */
 public class Database extends SQLiteOpenHelper {
 
     private static final String TAG = "Database";
     private static final String DATABASE_NAME = "DriverApp.db";
-    // Nếu bạn đã deploy DB cũ, tăng version để onUpgrade chạy; thử với 3
-    private static final int DATABASE_VERSION = 3;
+    // tăng version vì đổi schema
+    private static final int DATABASE_VERSION = 4;
 
     public Database(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -33,14 +26,11 @@ public class Database extends SQLiteOpenHelper {
     @Override
     public void onConfigure(SQLiteDatabase db) {
         super.onConfigure(db);
-        // Bật khóa ngoại cho tất cả kết nối
         db.setForeignKeyConstraintsEnabled(true);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        // Tạo bảng theo thứ tự đúng để các FK hợp lệ
-
         // 1) TaiKhoan
         db.execSQL("CREATE TABLE IF NOT EXISTS TaiKhoan (" +
                 "MaTaiKhoan INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -48,7 +38,7 @@ public class Database extends SQLiteOpenHelper {
                 "MatKhau TEXT NOT NULL" +
                 ");");
 
-        // 2) NguoiDung (tham chiếu MaTaiKhoan)
+        // 2) NguoiDung
         db.execSQL("CREATE TABLE IF NOT EXISTS NguoiDung (" +
                 "MaNguoiDung INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "MaTaiKhoan INTEGER NOT NULL, " +
@@ -62,19 +52,22 @@ public class Database extends SQLiteOpenHelper {
                 "FOREIGN KEY (MaTaiKhoan) REFERENCES TaiKhoan(MaTaiKhoan) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // 3) Xe (tham chiếu MaNguoiDung)
+        // 3) Xe (mở rộng cột)
         db.execSQL("CREATE TABLE IF NOT EXISTS Xe (" +
                 "MaXe INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "MaNguoiDung INTEGER, " +              // người sở hữu/đăng ký xe (nullable)
+                "MaNguoiDung INTEGER, " + // nullable chủ sở hữu/đăng ký xe
                 "BienSo TEXT UNIQUE NOT NULL, " +
                 "LoaiXe TEXT, " +
                 "HangSX TEXT, " +
                 "MauSac TEXT, " +
                 "SoHieu TEXT, " +
+                "NhienLieu TEXT, " +
+                "SoKmTong REAL DEFAULT 0, " +
+                "TrangThai TEXT DEFAULT '', " +
                 "FOREIGN KEY (MaNguoiDung) REFERENCES NguoiDung(MaNguoiDung) ON DELETE SET NULL ON UPDATE CASCADE" +
                 ");");
 
-        // 4) SucKhoe (tham chiếu MaNguoiDung)
+        // 4) SucKhoe (mới)
         db.execSQL("CREATE TABLE IF NOT EXISTS SucKhoe (" +
                 "MaSucKhoe INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "MaNguoiDung INTEGER NOT NULL, " +
@@ -82,36 +75,36 @@ public class Database extends SQLiteOpenHelper {
                 "CanNang REAL, " +
                 "BenhNen TEXT, " +
                 "NgayKham TEXT, " +
-                "MaTuy INTEGER, " +
+                "MaTuy TEXT, " +
                 "KetLuan TEXT, " +
                 "FOREIGN KEY (MaNguoiDung) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // 5) BangCap (MaTaiXe -> MaNguoiDung)
+        // 5) BangCap (bây giờ tham chiếu MaNguoiDung)
         db.execSQL("CREATE TABLE IF NOT EXISTS BangCap (" +
                 "MaBangCap INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "MaTaiXe INTEGER NOT NULL, " +
+                "MaNguoiDung INTEGER NOT NULL, " +
                 "Loai TEXT, " +
+                "SoBang TEXT, " +
                 "NgayCap TEXT, " +
                 "NgayHetHan TEXT, " +
                 "NoiCap TEXT, " +
                 "TinhTrang TEXT, " +
-                "GiayPhep TEXT, " +
-                "FOREIGN KEY (MaTaiXe) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE ON UPDATE CASCADE" +
+                "FOREIGN KEY (MaNguoiDung) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // 6) BaoHiem (MaTaiXe -> MaNguoiDung)
+        // 6) BaoHiem (tham chiếu MaXe)
         db.execSQL("CREATE TABLE IF NOT EXISTS BaoHiem (" +
                 "MaBaoHiem INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "MaTaiXe INTEGER NOT NULL, " +
+                "MaXe INTEGER NOT NULL, " +
                 "SoHD TEXT, " +
+                "CongTy TEXT, " +
                 "NgayBatDau TEXT, " +
                 "NgayKetThuc TEXT, " +
-                "CongTy TEXT, " +
-                "FOREIGN KEY (MaTaiXe) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE ON UPDATE CASCADE" +
+                "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // 7) BaoTri (MaXe -> MaXe)
+        // 7) BaoTri (MaXe)
         db.execSQL("CREATE TABLE IF NOT EXISTS BaoTri (" +
                 "MaBaoTri INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "MaXe INTEGER NOT NULL, " +
@@ -121,7 +114,40 @@ public class Database extends SQLiteOpenHelper {
                 "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // Dữ liệu mặc định: admin (chỉ khi chưa có)
+        // 8) ThietBi
+        db.execSQL("CREATE TABLE IF NOT EXISTS ThietBi (" +
+                "MaThietBi INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "MaXe INTEGER NOT NULL, " +
+                "GPS_TrangThai TEXT, " +
+                "LastThoiDiemPhatHien TEXT, " +
+                "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
+                ");");
+
+        // 9) PhienLaiXe
+        db.execSQL("CREATE TABLE IF NOT EXISTS PhienLaiXe (" +
+                "MaPhien INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "MaXe INTEGER NOT NULL, " +
+                "ThoiDiemBatDau TEXT, " +
+                "ThoiDiemKetThuc TEXT, " +
+                "TongGioLai REAL, " +
+                "TongKmTrongNgay REAL, " +
+                "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
+                ");");
+
+        // 10) Telemetry
+        db.execSQL("CREATE TABLE IF NOT EXISTS Telemetry (" +
+                "MaTelemetry INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "MaXe INTEGER NOT NULL, " +
+                "ThoiGian TEXT, " +
+                "Lat REAL, " +
+                "Lon REAL, " +
+                "TocDo REAL, " +
+                "ViTri TEXT, " +
+                "TrangThaiXe TEXT, " +
+                "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
+                ");");
+
+        // Dữ liệu mặc định admin
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (1, 'admin@vms.com', '123456');");
         db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai) " +
                 "VALUES (1, 1, 'Quản trị viên hệ thống', '1990-01-01', 'Nam', '0123456789', '0909123456', 'Admin', 'Đã duyệt');");
@@ -129,7 +155,10 @@ public class Database extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Đơn giản: drop + create (dev only). Trong production cần migrate.
+        // Dev-only: drop tất cả và tạo lại. (Production: viết migration)
+        db.execSQL("DROP TABLE IF EXISTS Telemetry");
+        db.execSQL("DROP TABLE IF EXISTS PhienLaiXe");
+        db.execSQL("DROP TABLE IF EXISTS ThietBi");
         db.execSQL("DROP TABLE IF EXISTS BaoTri");
         db.execSQL("DROP TABLE IF EXISTS BaoHiem");
         db.execSQL("DROP TABLE IF EXISTS BangCap");
@@ -144,9 +173,6 @@ public class Database extends SQLiteOpenHelper {
     // CRUD / helper methods
     // ---------------------------
 
-    /**
-     * Kiểm tra credentials (email + password)
-     */
     public boolean validateCredentials(String email, String password) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = null;
@@ -158,9 +184,6 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Lấy trạng thái người dùng (TrangThai) theo email.
-     */
     public String getUserStatus(String email) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = null;
@@ -177,18 +200,12 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Kiểm tra login hợp lệ và đã được duyệt.
-     */
     public boolean isApprovedLogin(String email, String password) {
         if (!validateCredentials(email, password)) return false;
         String status = getUserStatus(email);
         return status != null && status.trim().equalsIgnoreCase("Đã duyệt");
     }
 
-    /**
-     * Lấy vai trò người dùng theo email.
-     */
     public String getUserRole(String email) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = null;
@@ -205,9 +222,6 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Thêm người dùng mới (tạo TaiKhoan + NguoiDung).
-     */
     public boolean insertNguoiDung(String email, String matKhau, String hoTen,
                                    String ngaySinh, String gioiTinh, String cccd,
                                    String sdt, String vaiTro, String trangThai) {
@@ -215,10 +229,9 @@ public class Database extends SQLiteOpenHelper {
         Cursor cursor = null;
         db.beginTransaction();
         try {
-            // kiểm tra email tồn tại
             cursor = db.rawQuery("SELECT MaTaiKhoan FROM TaiKhoan WHERE Email = ?", new String[]{email});
             if (cursor != null && cursor.moveToFirst()) {
-                return false; // email đã tồn tại
+                return false;
             }
             if (cursor != null) { cursor.close(); cursor = null; }
 
@@ -256,9 +269,6 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Cập nhật trạng thái người dùng theo email.
-     */
     public boolean setUserStatus(String email, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -278,22 +288,26 @@ public class Database extends SQLiteOpenHelper {
     }
 
     /**
-     * Thêm xe kèm bảo trì + bảo hiểm (trong 1 transaction).
-     * maTaiXe là MaNguoiDung (chủ xe) - truyền dưới dạng int.
+     * Thêm xe kèm báo trì + bảo hiểm (trong 1 transaction).
+     * maNguoiDung là MaNguoiDung (chủ xe) - truyền dưới dạng int.
+     * Lưu ý: BaoHiem bây giờ tham chiếu MaXe (không phải MaNguoiDung).
      */
     public boolean insertXeWithBaoTriAndBaoHiem(String bienSo,
                                                 String loaiXe,
                                                 String hangSX,
                                                 String mauSac,
                                                 String soHieu,
+                                                String nhienLieu,
+                                                Double soKmTong,
+                                                String trangThaiXe,
                                                 String ngayGanNhatBaoTri,
                                                 String noiDungBaoTri,
                                                 String donViBaoTri,
-                                                int maTaiXe,
+                                                int maNguoiDung,
                                                 String soHDBaoHiem,
+                                                String congTyBaoHiem,
                                                 String ngayBatDauBaoHiem,
-                                                String ngayKetThucBaoHiem,
-                                                String congTyBaoHiem) {
+                                                String ngayKetThucBaoHiem) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.beginTransaction();
         Cursor checkCursor = null;
@@ -305,18 +319,22 @@ public class Database extends SQLiteOpenHelper {
             }
             if (checkCursor != null) { checkCursor.close(); checkCursor = null; }
 
-            // insert Xe (gắn MaNguoiDung)
+            // insert Xe
             ContentValues xeValues = new ContentValues();
-            xeValues.put("MaNguoiDung", maTaiXe);
+            xeValues.put("MaNguoiDung", maNguoiDung);
             xeValues.put("BienSo", bienSo);
             xeValues.put("LoaiXe", loaiXe);
             xeValues.put("HangSX", hangSX);
             xeValues.put("MauSac", mauSac);
             xeValues.put("SoHieu", soHieu);
+            xeValues.put("NhienLieu", nhienLieu);
+            if (soKmTong != null) xeValues.put("SoKmTong", soKmTong);
+            if (trangThaiXe != null) xeValues.put("TrangThai", trangThaiXe);
+
             long maXe = db.insert("Xe", null, xeValues);
             if (maXe == -1) return false;
 
-            // insert BaoTri
+            // insert BaoTri (gắn MaXe)
             ContentValues baoTriValues = new ContentValues();
             baoTriValues.put("MaXe", maXe);
             baoTriValues.put("NgayGanNhat", ngayGanNhatBaoTri);
@@ -325,13 +343,13 @@ public class Database extends SQLiteOpenHelper {
             long insertBaoTri = db.insert("BaoTri", null, baoTriValues);
             if (insertBaoTri == -1) return false;
 
-            // insert BaoHiem (MaTaiXe = MaNguoiDung)
+            // insert BaoHiem (bây giờ dùng MaXe)
             ContentValues baoHiemValues = new ContentValues();
-            baoHiemValues.put("MaTaiXe", maTaiXe);
+            baoHiemValues.put("MaXe", maXe);
             baoHiemValues.put("SoHD", soHDBaoHiem);
+            baoHiemValues.put("CongTy", congTyBaoHiem);
             baoHiemValues.put("NgayBatDau", ngayBatDauBaoHiem);
             baoHiemValues.put("NgayKetThuc", ngayKetThucBaoHiem);
-            baoHiemValues.put("CongTy", congTyBaoHiem);
             long insertBaoHiem = db.insert("BaoHiem", null, baoHiemValues);
             if (insertBaoHiem == -1) return false;
 
@@ -348,7 +366,6 @@ public class Database extends SQLiteOpenHelper {
 
     /**
      * Lấy MaNguoiDung theo email - trả về String (để bạn dễ truyền qua bundle).
-     * Trả về null nếu không tìm thấy.
      */
     public String getUserIdByEmail(String email) {
         SQLiteDatabase db = this.getReadableDatabase();
@@ -369,7 +386,6 @@ public class Database extends SQLiteOpenHelper {
 
     /**
      * Lấy thông tin người dùng cơ bản theo email -> User object (nếu bạn có class User)
-     * Trả về null nếu không tìm thấy.
      */
     public User getUserByEmail(String email) {
         SQLiteDatabase db = this.getReadableDatabase();
@@ -385,9 +401,6 @@ public class Database extends SQLiteOpenHelper {
                 String name = cursor.getString(cursor.getColumnIndexOrThrow("HoTen"));
                 String role = cursor.getString(cursor.getColumnIndexOrThrow("VaiTro"));
                 String status = cursor.getString(cursor.getColumnIndexOrThrow("TrangThai"));
-
-                // Bạn cần có constructor User(int id, String email, String name, String role, String status, String sdt, String cccd)
-                // Nếu class User khác, hãy chỉnh lại phần tạo object này.
                 return new User(id, mail, name, role, status);
             }
             return null;
@@ -395,29 +408,50 @@ public class Database extends SQLiteOpenHelper {
             if (cursor != null) cursor.close();
         }
     }
+
     public Cursor getXeById(int maXe) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.rawQuery("SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu FROM Xe WHERE MaXe = ?",
+        return db.rawQuery("SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai FROM Xe WHERE MaXe = ?",
                 new String[]{String.valueOf(maXe)});
     }
 
-    /**
-     * Lấy Cursor bảo trì mới nhất cho MaXe
-     */
     public Cursor getLatestBaoTriByMaXe(int maXe) {
         SQLiteDatabase db = this.getReadableDatabase();
-        // ORDER BY MaBaoTri DESC đảm bảo lấy bản ghi mới nhất nếu format ngày không chuẩn
         return db.rawQuery("SELECT MaBaoTri, NgayGanNhat, NoiDung, DonVi FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC, MaBaoTri DESC LIMIT 1",
                 new String[]{String.valueOf(maXe)});
     }
 
-    /**
-     * Lấy Cursor bảo hiểm mới nhất cho MaTaiXe (MaNguoiDung)
-     */
-    public Cursor getLatestBaoHiemByMaTaiXe(int maTaiXe) {
+    public Cursor getLatestBaoHiemByMaXe(int maXe) {
         SQLiteDatabase db = this.getReadableDatabase();
-        return db.rawQuery("SELECT MaBaoHiem, SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
-                new String[]{String.valueOf(maTaiXe)});
+        return db.rawQuery("SELECT MaBaoHiem, SoHD, CongTy, NgayBatDau, NgayKetThuc FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                new String[]{String.valueOf(maXe)});
     }
-    // Các helper nhỏ (nếu cần bạn có thể thêm nhiều hàm truy vấn tiện ích)
+
+    /**
+     * Lấy cursor SucKhoe mới nhất cho MaNguoiDung (nếu cần)
+     */
+    public Cursor getLatestSucKhoeByMaNguoiDung(int maNguoiDung) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.rawQuery("SELECT MaSucKhoe, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan " +
+                        "FROM SucKhoe WHERE MaNguoiDung = ? ORDER BY NgayKham DESC, MaSucKhoe DESC LIMIT 1",
+                new String[]{String.valueOf(maNguoiDung)});
+    }
+
+    /**
+     * Lấy danh sách tài xế / nhân viên (cursor) để dùng cho dropdown.
+     * Lọc dựa vào VaiTro chứa 'tài' hoặc 'nhân viên' (case-insensitive).
+     */
+    public Cursor getDriversCursor() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.rawQuery(
+                "SELECT MaNguoiDung, HoTen FROM NguoiDung " +
+                        "WHERE lower(COALESCE(VaiTro,'')) LIKE ? " +
+                        "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                        "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                        "OR lower(COALESCE(VaiTro,'')) LIKE ?",
+                new String[]{"%tài%", "%tài xế%", "%nhân viên%", "%nhan vien%"}
+        );
+    }
+
+    // Bạn có thể thêm helper khác (insertTelemetry, insertPhienLai, getTelemetriesForXe, ...) nếu cần.
 }

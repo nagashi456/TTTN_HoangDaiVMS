@@ -66,7 +66,7 @@ public class AddVehicleFragment extends Fragment {
         edtHangSX = view.findViewById(R.id.edtHangSX);
         edtMauSac = view.findViewById(R.id.edtMauSac);
         edtSoHieuLop = view.findViewById(R.id.edtSoHieuLop);
-        edtNhienLieu = view.findViewById(R.id.edtNhienLieu);
+        edtNhienLieu = view.findViewById(R.id.edtNhienLieu); // fuel
 
         edtSoHopDong = view.findViewById(R.id.edtSoHopDong);
         edtNgayBatDau = view.findViewById(R.id.edtNgayBatDau);
@@ -185,6 +185,9 @@ public class AddVehicleFragment extends Fragment {
                 final String mauSac = getText(edtMauSac);
                 final String soHieu = getText(edtSoHieuLop);
 
+                // fuel
+                final String nhienLieu = getText(edtNhienLieu);
+
                 final String soHopDong = getText(edtSoHopDong);
                 final String ngayBatDau = getText(edtNgayBatDau);
                 final String ngayKetThuc = getText(edtNgayKetThuc);
@@ -246,20 +249,28 @@ public class AddVehicleFragment extends Fragment {
 
                         final int assignedId = maTaiXeToAssign;
 
+                        // soKmTong: nếu bạn muốn lấy từ UI, thêm EditText và parse ở đây; hiện để null (DB xử lý default)
+                        final Double soKmTong = null;
+                        // trangThaiXe: nếu bạn muốn lấy từ UI, thêm EditText; đặt mặc định rỗng
+                        final String trangThaiXe = "";
+
                         boolean inserted = db.insertXeWithBaoTriAndBaoHiem(
-                                bienSo,
-                                loaiXe,
-                                hangSX,
-                                mauSac,
-                                soHieu,
-                                ngayGanNhat, // ngayGanNhat bao tri
-                                noiDung,
-                                donVi,
-                                assignedId,
-                                soHopDong,
-                                ngayBatDau,
-                                ngayKetThuc,
-                                congTy
+                                bienSo,            // BienSo
+                                loaiXe,            // LoaiXe
+                                hangSX,            // HangSX
+                                mauSac,            // MauSac
+                                soHieu,            // SoHieu
+                                nhienLieu,         // NhienLieu
+                                soKmTong,          // SoKmTong (Double, có thể null)
+                                trangThaiXe,       // TrangThai (String)
+                                ngayGanNhat,       // NgayGanNhat (BaoTri)
+                                noiDung,           // NoiDung (BaoTri)
+                                donVi,             // DonVi (BaoTri)
+                                assignedId,        // MaNguoiDung (chủ xe)
+                                soHopDong,         // SoHD (BaoHiem) - ở DB hiện MaXe liên kết BaoHiem nên hàm sẽ tạo BaoHiem gắn MaXe vừa tạo
+                                congTy,            // CongTy (BaoHiem)
+                                ngayBatDau,        // NgayBatDau (BaoHiem)
+                                ngayKetThuc        // NgayKetThuc (BaoHiem)
                         );
 
                         if (inserted) {
@@ -312,14 +323,18 @@ public class AddVehicleFragment extends Fragment {
             List<String> ids = new ArrayList<>();
             try {
                 // Tìm cả các biến thể có dấu & không dấu để tăng khả năng khớp
-                android.database.Cursor cursor = db.getReadableDatabase().rawQuery(
-                        "SELECT MaNguoiDung, HoTen FROM NguoiDung " +
-                                "WHERE lower(COALESCE(VaiTro,'')) LIKE ? " +
-                                "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
-                                "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
-                                "OR lower(COALESCE(VaiTro,'')) LIKE ?",
-                        new String[]{"%nhân viên%", "%tài xế%", "%nhan vien%", "%tai xe%"}
-                );
+                android.database.Cursor cursor = db.getDriversCursor(); // nếu bạn đã thêm helper này
+                if (cursor == null) {
+                    // fallback: query inline (nếu helper chưa tồn tại)
+                    cursor = db.getReadableDatabase().rawQuery(
+                            "SELECT MaNguoiDung, HoTen FROM NguoiDung " +
+                                    "WHERE lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                    "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                    "OR lower(COALESCE(VaiTro,'')) LIKE ? " +
+                                    "OR lower(COALESCE(VaiTro,'')) LIKE ?",
+                            new String[]{"%nhân viên%", "%tài xế%", "%nhan vien%", "%tai xe%"}
+                    );
+                }
 
                 if (cursor != null && cursor.moveToFirst()) {
                     do {

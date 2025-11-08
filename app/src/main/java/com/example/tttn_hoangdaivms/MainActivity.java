@@ -152,7 +152,20 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     return false;
                 }
+            } else if (item.getItemId() == R.id.nav_trip) {
+                if ("Admin".equalsIgnoreCase(userRole)) {
+                    Toast.makeText(this, "Hành trình chưa có chức năng", Toast.LENGTH_SHORT).show();
+                } else {
+                    return false;
+                }
+            } else if (item.getItemId() == R.id.nav_report) {
+                if ("Admin".equalsIgnoreCase(userRole)) {
+                    Toast.makeText(this, "Báo cáo chưa có chức năng", Toast.LENGTH_SHORT).show();
+                } else {
+                    return false;
+                }
             }
+
 
             if (fragment != null) {
                 getSupportFragmentManager()

@@ -20,7 +20,6 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.example.tttn_hoangdaivms.Database.Database;
-import com.example.tttn_hoangdaivms.DriverList.DriverListModel;
 import com.example.tttn_hoangdaivms.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
@@ -47,7 +46,7 @@ public class EditVehicleFragment extends Fragment {
 
     private Database dbHelper;
 
-    // driver list mapping (name -> id). We keep parallel arrays to show.
+    // driver list mapping (name -> id)
     private final List<String> driverNames = new ArrayList<>();
     private final List<String> driverIds = new ArrayList<>();
     private final Map<String, Integer> driverNameToId = new HashMap<>();
@@ -111,13 +110,13 @@ public class EditVehicleFragment extends Fragment {
             maXe = args.getInt(ARG_MA_XE, -1);
         }
 
-        // load drivers for dropdown
+        // load drivers for dropdown (background not necessary here; small table)
         loadDriversForDropdown();
 
         // setup date pickers
-        edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
-        edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
-        edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
+        if (edtNgayBatDau != null) edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
+        if (edtNgayKetThuc != null) edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
+        if (edtNgayGanNhat != null) edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
 
         // if maXe provided -> load data
         if (maXe != -1) {
@@ -128,29 +127,28 @@ public class EditVehicleFragment extends Fragment {
 
         // save click
         btnSave.setOnClickListener(v -> saveVehicle());
-
     }
 
     private void prefillEmptyPlaceholders() {
         // show "Chưa có thông tin" as hint where appropriate
-        edtBienSo.setHint("Chưa có thông tin");
-        edtLoaiXe.setHint("Chưa có thông tin");
-        edtHangSX.setHint("Chưa có thông tin");
-        edtMauSac.setHint("Chưa có thông tin");
-        edtSoHieuLop.setHint("Chưa có thông tin");
-//        edtNhienLieu.setHint("Chưa có thông tin");
+        if (edtBienSo != null) edtBienSo.setHint("Chưa có thông tin");
+        if (edtLoaiXe != null) edtLoaiXe.setHint("Chưa có thông tin");
+        if (edtHangSX != null) edtHangSX.setHint("Chưa có thông tin");
+        if (edtMauSac != null) edtMauSac.setHint("Chưa có thông tin");
+        if (edtSoHieuLop != null) edtSoHieuLop.setHint("Chưa có thông tin");
 
-        edtSoHopDong.setHint("Chưa có thông tin");
-        edtNgayBatDau.setHint("Chưa có thông tin");
-        edtNgayKetThuc.setHint("Chưa có thông tin");
-        edtCongTyBH.setHint("Chưa có thông tin");
+        if (edtSoHopDong != null) edtSoHopDong.setHint("Chưa có thông tin");
+        if (edtNgayBatDau != null) edtNgayBatDau.setHint("Chưa có thông tin");
+        if (edtNgayKetThuc != null) edtNgayKetThuc.setHint("Chưa có thông tin");
+        if (edtCongTyBH != null) edtCongTyBH.setHint("Chưa có thông tin");
 
-        edtNoiDung.setHint("Chưa có thông tin");
-        edtNgayGanNhat.setHint("Chưa có thông tin");
-        edtDonViThucHien.setHint("Chưa có thông tin");
+        if (edtNoiDung != null) edtNoiDung.setHint("Chưa có thông tin");
+        if (edtNgayGanNhat != null) edtNgayGanNhat.setHint("Chưa có thông tin");
+        if (edtDonViThucHien != null) edtDonViThucHien.setHint("Chưa có thông tin");
     }
 
     private void showDatePicker(final EditText target) {
+        if (target == null) return;
         final Calendar c = Calendar.getInstance();
         DatePickerDialog dpd = new DatePickerDialog(requireContext(),
                 (view, year, month, dayOfMonth) -> {
@@ -170,18 +168,18 @@ public class EditVehicleFragment extends Fragment {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor c = null;
         try {
-            // Lấy tất cả NguoiDung có VaiTro chứa "tài" hoặc "nhân viên" (tuỳ schema)
-            c = db.rawQuery("SELECT MaNguoiDung, HoTen FROM NguoiDung ORDER BY HoTen COLLATE NOCASE", null);
+            // Lọc VaiTro chứa 'tài' hoặc 'nhân viên' (case-insensitive) — phù hợp với dữ liệu thật
+            c = db.rawQuery(
+                    "SELECT MaNguoiDung, HoTen FROM NguoiDung WHERE lower(COALESCE(VaiTro,'')) LIKE ? OR lower(COALESCE(VaiTro,'')) LIKE ? ORDER BY HoTen COLLATE NOCASE",
+                    new String[]{"%tài%", "%nhân viên%"}
+            );
+
             if (c != null && c.moveToFirst()) {
                 do {
                     int id = -1;
-                    try {
-                        id = c.getInt(0);
-                    } catch (Exception ignored) {}
+                    try { id = c.getInt(0); } catch (Exception ignored) {}
                     String name = "";
-                    try {
-                        name = c.getString(1);
-                    } catch (Exception ignored) {}
+                    try { name = c.getString(1); } catch (Exception ignored) {}
                     if (TextUtils.isEmpty(name)) name = "Không rõ (" + id + ")";
                     driverNames.add(name);
                     driverIds.add(String.valueOf(id));
@@ -192,13 +190,20 @@ public class EditVehicleFragment extends Fragment {
             ex.printStackTrace();
         } finally {
             if (c != null) c.close();
-            // set adapter
+        }
+
+        // set adapter & UX
+        if (actvAssignDriver != null) {
             ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                     android.R.layout.simple_dropdown_item_1line, driverNames);
             actvAssignDriver.setAdapter(adapter);
+            actvAssignDriver.setThreshold(0);
+            actvAssignDriver.setOnClickListener(v -> {
+                if (!driverNames.isEmpty()) actvAssignDriver.showDropDown();
+            });
         }
 
-        // if empty, hide rowAssignDriver view (optional)
+        // hide row if empty (optional)
         View rowAssign = getView() != null ? getView().findViewById(R.id.rowAssignDriver) : null;
         if (driverNames.isEmpty() && rowAssign != null) rowAssign.setVisibility(View.GONE);
     }
@@ -210,7 +215,7 @@ public class EditVehicleFragment extends Fragment {
         Cursor cBaoHiem = null;
 
         try {
-            cXe = db.rawQuery("SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu FROM Xe WHERE MaXe = ?",
+            cXe = db.rawQuery("SELECT MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu FROM Xe WHERE MaXe = ?",
                     new String[]{String.valueOf(maXe)});
             if (cXe != null && cXe.moveToFirst()) {
                 int maNguoiDung = -1;
@@ -220,29 +225,28 @@ public class EditVehicleFragment extends Fragment {
                 String hangSX = safeGet(cXe, "HangSX");
                 String mauSac = safeGet(cXe, "MauSac");
                 String soHieu = safeGet(cXe, "SoHieu");
-//                String nhienLieu = safeGet(cXe, "NhiênLieu"); // nếu cột tên khác thì điều chỉnh
+                String nhienLieu = safeGet(cXe, "NhienLieu");
 
-                edtBienSo.setText(!TextUtils.isEmpty(bienSo) ? bienSo : "");
-                edtLoaiXe.setText(!TextUtils.isEmpty(loaiXe) ? loaiXe : "");
-                edtHangSX.setText(!TextUtils.isEmpty(hangSX) ? hangSX : "");
-                edtMauSac.setText(!TextUtils.isEmpty(mauSac) ? mauSac : "");
-                edtSoHieuLop.setText(!TextUtils.isEmpty(soHieu) ? soHieu : "");
-//                edtNhienLieu.setText(!TextUtils.isEmpty(nhienLieu) ? nhienLieu : "");
+                if (edtBienSo != null) edtBienSo.setText(!TextUtils.isEmpty(bienSo) ? bienSo : "");
+                if (edtLoaiXe != null) edtLoaiXe.setText(!TextUtils.isEmpty(loaiXe) ? loaiXe : "");
+                if (edtHangSX != null) edtHangSX.setText(!TextUtils.isEmpty(hangSX) ? hangSX : "");
+                if (edtMauSac != null) edtMauSac.setText(!TextUtils.isEmpty(mauSac) ? mauSac : "");
+                if (edtSoHieuLop != null) edtSoHieuLop.setText(!TextUtils.isEmpty(soHieu) ? soHieu : "");
+                if (edtNhienLieu != null) edtNhienLieu.setText(!TextUtils.isEmpty(nhienLieu) ? nhienLieu : "");
 
                 // set driver selection if available
-                if (maNguoiDung != -1) {
-                    // tìm tên tương ứng trong driverIds
+                if (maNguoiDung != -1 && actvAssignDriver != null) {
                     String idStr = String.valueOf(maNguoiDung);
                     int idx = driverIds.indexOf(idStr);
                     if (idx >= 0) {
                         actvAssignDriver.setText(driverNames.get(idx), false);
                     } else {
-                        // nếu driver list không chứa (có thể do filter), truy vấn tên trực tiếp
+                        // nếu driver list không chứa (ví dụ vai trò khác), truy vấn tên trực tiếp
                         Cursor cName = null;
                         try {
                             cName = db.rawQuery("SELECT HoTen FROM NguoiDung WHERE MaNguoiDung = ?", new String[]{idStr});
                             if (cName != null && cName.moveToFirst()) {
-                                String name = safeGet(cName, "0");
+                                String name = cName.getString(0);
                                 if (!TextUtils.isEmpty(name)) {
                                     actvAssignDriver.setText(name, false);
                                     driverNameToId.put(name, maNguoiDung);
@@ -256,7 +260,7 @@ public class EditVehicleFragment extends Fragment {
                     }
                 }
 
-                // BaoTri: lấy bản mới nhất (MaXe)
+                // BaoTri: latest by MaXe
                 cBaoTri = db.rawQuery("SELECT MaBaoTri, NgayGanNhat, NoiDung, DonVi FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC, MaBaoTri DESC LIMIT 1",
                         new String[]{String.valueOf(maXe)});
                 if (cBaoTri != null && cBaoTri.moveToFirst()) {
@@ -264,26 +268,24 @@ public class EditVehicleFragment extends Fragment {
                     String noiDung = safeGet(cBaoTri, "NoiDung");
                     String donVi = safeGet(cBaoTri, "DonVi");
 
-                    edtNgayGanNhat.setText(!TextUtils.isEmpty(ngay) ? ngay : "");
-                    edtNoiDung.setText(!TextUtils.isEmpty(noiDung) ? noiDung : "");
-                    edtDonViThucHien.setText(!TextUtils.isEmpty(donVi) ? donVi : "");
+                    if (edtNgayGanNhat != null) edtNgayGanNhat.setText(!TextUtils.isEmpty(ngay) ? ngay : "");
+                    if (edtNoiDung != null) edtNoiDung.setText(!TextUtils.isEmpty(noiDung) ? noiDung : "");
+                    if (edtDonViThucHien != null) edtDonViThucHien.setText(!TextUtils.isEmpty(donVi) ? donVi : "");
                 }
 
-                // BaoHiem: lấy bản mới nhất theo MaTaiXe = MaNguoiDung
-                if (maNguoiDung != -1) {
-                    cBaoHiem = db.rawQuery("SELECT MaBaoHiem, SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
-                            new String[]{String.valueOf(maNguoiDung)});
-                    if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
-                        String soHD = safeGet(cBaoHiem, "SoHD");
-                        String ngayBD = safeGet(cBaoHiem, "NgayBatDau");
-                        String ngayKT = safeGet(cBaoHiem, "NgayKetThuc");
-                        String congTy = safeGet(cBaoHiem, "CongTy");
+                // BaoHiem: latest by MaXe (NOTE: new schema uses MaXe in BaoHiem)
+                cBaoHiem = db.rawQuery("SELECT MaBaoHiem, SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                        new String[]{String.valueOf(maXe)});
+                if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
+                    String soHD = safeGet(cBaoHiem, "SoHD");
+                    String ngayBD = safeGet(cBaoHiem, "NgayBatDau");
+                    String ngayKT = safeGet(cBaoHiem, "NgayKetThuc");
+                    String congTy = safeGet(cBaoHiem, "CongTy");
 
-                        edtSoHopDong.setText(!TextUtils.isEmpty(soHD) ? soHD : "");
-                        edtNgayBatDau.setText(!TextUtils.isEmpty(ngayBD) ? ngayBD : "");
-                        edtNgayKetThuc.setText(!TextUtils.isEmpty(ngayKT) ? ngayKT : "");
-                        edtCongTyBH.setText(!TextUtils.isEmpty(congTy) ? congTy : "");
-                    }
+                    if (edtSoHopDong != null) edtSoHopDong.setText(!TextUtils.isEmpty(soHD) ? soHD : "");
+                    if (edtNgayBatDau != null) edtNgayBatDau.setText(!TextUtils.isEmpty(ngayBD) ? ngayBD : "");
+                    if (edtNgayKetThuc != null) edtNgayKetThuc.setText(!TextUtils.isEmpty(ngayKT) ? ngayKT : "");
+                    if (edtCongTyBH != null) edtCongTyBH.setText(!TextUtils.isEmpty(congTy) ? congTy : "");
                 }
 
             } else {
@@ -325,7 +327,7 @@ public class EditVehicleFragment extends Fragment {
         String hangSX = edtHangSX.getText() == null ? "" : edtHangSX.getText().toString().trim();
         String mauSac = edtMauSac.getText() == null ? "" : edtMauSac.getText().toString().trim();
         String soHieu = edtSoHieuLop.getText() == null ? "" : edtSoHieuLop.getText().toString().trim();
-//        String nhienLieu = edtNhienLieu.getText() == null ? "" : edtNhienLieu.getText().toString().trim();
+        String nhienLieu = edtNhienLieu.getText() == null ? "" : edtNhienLieu.getText().toString().trim();
 
         String driverName = actvAssignDriver.getText() == null ? "" : actvAssignDriver.getText().toString().trim();
         int maTaiXe = -1;
@@ -360,26 +362,28 @@ public class EditVehicleFragment extends Fragment {
             if (maXe == -1) {
                 // Insert new Xe
                 ContentValues vXe = new ContentValues();
-                vXe.put("MaNguoiDung", maTaiXe != -1 ? maTaiXe : (Integer) null);
+                if (maTaiXe != -1) vXe.put("MaNguoiDung", maTaiXe);
+                else vXe.putNull("MaNguoiDung");
                 vXe.put("BienSo", bienSo);
                 vXe.put("LoaiXe", loaiXe);
                 vXe.put("HangSX", hangSX);
                 vXe.put("MauSac", mauSac);
                 vXe.put("SoHieu", soHieu);
-//                vXe.put("NhiênLieu", nhienLieu); // nếu tên column khác thì sửa lại
+                vXe.put("NhienLieu", nhienLieu);
                 long newId = db.insert("Xe", null, vXe);
                 if (newId == -1) throw new Exception("Không thể tạo bản ghi Xe mới.");
                 targetMaXe = newId;
             } else {
                 // Update existing Xe
                 ContentValues vXe = new ContentValues();
-                if (maTaiXe != -1) vXe.put("MaNguoiDung", maTaiXe); else vXe.putNull("MaNguoiDung");
+                if (maTaiXe != -1) vXe.put("MaNguoiDung", maTaiXe);
+                else vXe.putNull("MaNguoiDung");
                 vXe.put("BienSo", bienSo);
                 vXe.put("LoaiXe", loaiXe);
                 vXe.put("HangSX", hangSX);
                 vXe.put("MauSac", mauSac);
                 vXe.put("SoHieu", soHieu);
-//                vXe.put("NhiênLieu", nhienLieu);
+                vXe.put("NhienLieu", nhienLieu);
                 int updated = db.update("Xe", vXe, "MaXe = ?", new String[]{String.valueOf(maXe)});
                 if (updated <= 0) {
                     throw new Exception("Cập nhật xe thất bại.");
@@ -389,7 +393,6 @@ public class EditVehicleFragment extends Fragment {
             // Handle BaoTri (by MaXe): update latest if exists else insert if user provided any info
             boolean hasBaoTriInput = !TextUtils.isEmpty(ngayGanNhat) || !TextUtils.isEmpty(noiDung) || !TextUtils.isEmpty(donVi);
             if (hasBaoTriInput) {
-                // try get latest MaBaoTri for this MaXe
                 Cursor cbt = null;
                 try {
                     cbt = db.rawQuery("SELECT MaBaoTri FROM BaoTri WHERE MaXe = ? ORDER BY NgayGanNhat DESC, MaBaoTri DESC LIMIT 1",
@@ -402,7 +405,6 @@ public class EditVehicleFragment extends Fragment {
                         vBT.put("DonVi", donVi);
                         int up = db.update("BaoTri", vBT, "MaBaoTri = ?", new String[]{String.valueOf(maBaoTri)});
                         if (up <= 0) {
-                            // as fallback insert new
                             ContentValues ins = new ContentValues();
                             ins.put("MaXe", targetMaXe);
                             ins.put("NgayGanNhat", ngayGanNhat);
@@ -411,7 +413,6 @@ public class EditVehicleFragment extends Fragment {
                             db.insert("BaoTri", null, ins);
                         }
                     } else {
-                        // insert new BaoTri
                         ContentValues ins = new ContentValues();
                         ins.put("MaXe", targetMaXe);
                         ins.put("NgayGanNhat", ngayGanNhat);
@@ -424,13 +425,13 @@ public class EditVehicleFragment extends Fragment {
                 }
             }
 
-            // Handle BaoHiem (by MaTaiXe): only if we have a MaTaiXe
+            // Handle BaoHiem (by MaXe) — NEW SCHEMA: BaoHiem.MaXe
             boolean hasBaoHiemInput = !TextUtils.isEmpty(soHD) || !TextUtils.isEmpty(ngayBatDau) || !TextUtils.isEmpty(ngayKetThuc) || !TextUtils.isEmpty(congTy);
-            if (maTaiXe != -1 && hasBaoHiemInput) {
+            if (hasBaoHiemInput) {
                 Cursor cbh = null;
                 try {
-                    cbh = db.rawQuery("SELECT MaBaoHiem FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
-                            new String[]{String.valueOf(maTaiXe)});
+                    cbh = db.rawQuery("SELECT MaBaoHiem FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                            new String[]{String.valueOf(targetMaXe)});
                     if (cbh != null && cbh.moveToFirst()) {
                         int maBaoHiem = cbh.getInt(0);
                         ContentValues vBH = new ContentValues();
@@ -441,7 +442,7 @@ public class EditVehicleFragment extends Fragment {
                         int up = db.update("BaoHiem", vBH, "MaBaoHiem = ?", new String[]{String.valueOf(maBaoHiem)});
                         if (up <= 0) {
                             ContentValues ins = new ContentValues();
-                            ins.put("MaTaiXe", maTaiXe);
+                            ins.put("MaXe", targetMaXe);
                             ins.put("SoHD", soHD);
                             ins.put("NgayBatDau", ngayBatDau);
                             ins.put("NgayKetThuc", ngayKetThuc);
@@ -450,7 +451,7 @@ public class EditVehicleFragment extends Fragment {
                         }
                     } else {
                         ContentValues ins = new ContentValues();
-                        ins.put("MaTaiXe", maTaiXe);
+                        ins.put("MaXe", targetMaXe);
                         ins.put("SoHD", soHD);
                         ins.put("NgayBatDau", ngayBatDau);
                         ins.put("NgayKetThuc", ngayKetThuc);
@@ -474,13 +475,9 @@ public class EditVehicleFragment extends Fragment {
             ex.printStackTrace();
             Toast.makeText(requireContext(), "Lỗi khi lưu: " + ex.getMessage(), Toast.LENGTH_LONG).show();
         } finally {
-            try {
-                if (db != null) {
-                    db.endTransaction();
-                    // do not close db here (Database helper manages it), but it's safe to call db.close() if you prefer
-                }
-            } catch (Exception ignored) {}
+            if (db != null) {
+                try { db.endTransaction(); } catch (Exception ignored) {}
+            }
         }
     }
 }
-

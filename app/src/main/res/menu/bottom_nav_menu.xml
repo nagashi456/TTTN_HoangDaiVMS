@@ -12,4 +12,13 @@
         android:id="@+id/nav_request"
         android:icon="@drawable/ic_list"
         android:title="Yêu cầu" />
+    <item
+        android:id="@+id/nav_trip"
+        android:icon="@drawable/ic_trip"
+        android:title="Hành trình"/>
+    <item
+        android:id= "@+id/nav_report"
+        android:icon="@drawable/ic_report"
+        android:title="Báo cáo"/>
+
 </menu>

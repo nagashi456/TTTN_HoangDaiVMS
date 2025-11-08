@@ -464,7 +464,7 @@ public class HomeFragement extends Fragment {
             cursor = db.rawQuery(
                     "SELECT BC.Loai, BC.NgayHetHan, BC.NoiCap " +
                             "FROM BangCap BC " +
-                            "JOIN NguoiDung ND ON BC.MaTaiXe = ND.MaNguoiDung " +
+                            "JOIN NguoiDung ND ON BC.MaNguoiDung = ND.MaNguoiDung " +
                             "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE TK.Email = ? ",
                     new String[]{ String.valueOf(loggedInEmail) }

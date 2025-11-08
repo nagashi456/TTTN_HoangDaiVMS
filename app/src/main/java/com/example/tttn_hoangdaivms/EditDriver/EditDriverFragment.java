@@ -214,7 +214,7 @@ public class EditDriverFragment extends Fragment {
                     if (maNguoiDung != -1) {
                         boolean hasBangCap = false;
                         int bangCapId = -1;
-                        try (Cursor c = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaTaiXe = ? ORDER BY MaBangCap DESC LIMIT 1",
+                        try (Cursor c = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaNguoiDung = ? ORDER BY MaBangCap DESC LIMIT 1",
                                 new String[]{String.valueOf(maNguoiDung)})) {
                             if (c != null && c.moveToFirst()) {
                                 hasBangCap = true;
@@ -226,7 +226,7 @@ public class EditDriverFragment extends Fragment {
                         if (!TextUtils.isEmpty(licenseType)) cvBC.put("Loai", licenseType);
                         if (!TextUtils.isEmpty(dateExpired)) cvBC.put("NgayHetHan", dateExpired);
                         if (!TextUtils.isEmpty(address)) cvBC.put("NoiCap", address);
-                        cvBC.put("MaTaiXe", maNguoiDung);
+                        cvBC.put("MaNguoiDung", maNguoiDung);
 
                         if (hasBangCap && bangCapId != -1) {
                             db.update("BangCap", cvBC, "MaBangCap = ?", new String[]{String.valueOf(bangCapId)});
@@ -315,7 +315,7 @@ public class EditDriverFragment extends Fragment {
 
                 // 3) BangCap latest
                 String loai = null, ngayHet = null, noiCap = null;
-                c = db.rawQuery("SELECT Loai, NgayCap, NgayHetHan, NoiCap FROM BangCap WHERE MaTaiXe = ? ORDER BY MaBangCap DESC LIMIT 1",
+                c = db.rawQuery("SELECT Loai, NgayCap, NgayHetHan, NoiCap FROM BangCap WHERE MaNguoiDung = ? ORDER BY MaBangCap DESC LIMIT 1",
                         new String[]{idStr});
                 if (c != null && c.moveToFirst()) {
                     loai = safeGetColumn(c, "Loai", 0);

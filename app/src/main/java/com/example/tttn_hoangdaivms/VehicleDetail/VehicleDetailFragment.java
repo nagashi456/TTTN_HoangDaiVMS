@@ -26,7 +26,7 @@ public class VehicleDetailFragment extends Fragment {
     private TextView tvBienSo, tvLoaiXe, tvHangSX, tvMauSac, tvSoHieu;
     private TextView tvSoHD, tvNgayBatDau, tvNgayKetThuc, tvCongTy;
     private TextView tvNgayGanNhatBT, tvNoiDungBT, tvDonViBT;
-    private ImageView ivClose, ivEdit, ivCover;
+    private ImageView ivClose, ivCover;
     private Database database;
 
     public VehicleDetailFragment() { /* required */ }
@@ -41,13 +41,13 @@ public class VehicleDetailFragment extends Fragment {
 
     @Nullable
     @Override
-    public android.view.View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                                          @Nullable android.os.Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable android.os.Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_vehicle_detail, container, false);
     }
 
     @Override
-    public void onViewCreated(@NonNull android.view.View view, @Nullable android.os.Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull View view, @Nullable android.os.Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
         // Find views
@@ -93,10 +93,20 @@ public class VehicleDetailFragment extends Fragment {
         final int finalMaXe = maXe;
         // Run DB operations in background thread
         new Thread(() -> loadVehicleDetailBackground(finalMaXe)).start();
-//        View bottomNav = requireActivity().findViewById(R.id.bottomNavigation);
-//        if (bottomNav != null) {
-//            bottomNav.setVisibility(View.GONE);
-//        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Close database helper to avoid leaks
+        try {
+            if (database != null) {
+                database.close();
+                database = null;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error closing database: " + e.getMessage());
+        }
     }
 
     // Helper lấy string an toàn (cursor local only)
@@ -132,7 +142,6 @@ public class VehicleDetailFragment extends Fragment {
         try {
             // 1) Lấy thông tin xe
             try {
-                // try helper if exists
                 cXe = database.getXeById(maXe);
             } catch (Exception e) {
                 cXe = database.getReadableDatabase().rawQuery(
@@ -202,27 +211,26 @@ public class VehicleDetailFragment extends Fragment {
             try { if (cBaoTri != null && !cBaoTri.isClosed()) cBaoTri.close(); } catch (Exception ignored) {}
         }
 
-        // 4) Lấy BaoHiem mới nhất theo MaTaiXe = MaNguoiDung (nếu có)
-        if (maNguoiDung != -1) {
+        // 4) Lấy BaoHiem mới nhất cho MaXe (SỬA: dùng MaXe chứ không phải MaNguoiDung)
+        try {
             try {
-                try {
-                    cBaoHiem = database.getLatestBaoHiemByMaTaiXe(maNguoiDung);
-                } catch (Exception e) {
-                    cBaoHiem = database.getReadableDatabase().rawQuery(
-                            "SELECT SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaTaiXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
-                            new String[]{String.valueOf(maNguoiDung)});
-                }
-                if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
-                    soHD = getStringSafeLocal(cBaoHiem, "SoHD");
-                    ngayBD = getStringSafeLocal(cBaoHiem, "NgayBatDau");
-                    ngayKT = getStringSafeLocal(cBaoHiem, "NgayKetThuc");
-                    congTy = getStringSafeLocal(cBaoHiem, "CongTy");
-                }
-            } catch (Exception ex) {
-                Log.e(TAG, "Error reading BaoHiem", ex);
-            } finally {
-                try { if (cBaoHiem != null && !cBaoHiem.isClosed()) cBaoHiem.close(); } catch (Exception ignored) {}
+                cBaoHiem = database.getLatestBaoHiemByMaXe(maXe);
+            } catch (Exception e) {
+                // fallback rawQuery: lọc theo MaXe
+                cBaoHiem = database.getReadableDatabase().rawQuery(
+                        "SELECT SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
+                        new String[]{String.valueOf(maXe)});
             }
+            if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
+                soHD = getStringSafeLocal(cBaoHiem, "SoHD");
+                ngayBD = getStringSafeLocal(cBaoHiem, "NgayBatDau");
+                ngayKT = getStringSafeLocal(cBaoHiem, "NgayKetThuc");
+                congTy = getStringSafeLocal(cBaoHiem, "CongTy");
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "Error reading BaoHiem", ex);
+        } finally {
+            try { if (cBaoHiem != null && !cBaoHiem.isClosed()) cBaoHiem.close(); } catch (Exception ignored) {}
         }
 
         // Tất cả dữ liệu đã được đọc và cursors đã đóng — giờ cập nhật UI bằng các biến thuần
