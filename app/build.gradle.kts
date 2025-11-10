@@ -40,7 +40,16 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-
+    // Google Maps
+    implementation("com.google.android.gms:play-services-maps:18.1.0")
+    // Location (Fused Location Provider) - optional but useful
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    // Apache POI để tạo file .xlsx
+    implementation("org.apache.poi:poi:5.2.3")
+    implementation("org.apache.poi:poi-ooxml:5.2.3")
+    // Material / AndroidX (nếu chưa có)
+    implementation("com.google.android.material:material:1.9.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
     //Glide
     implementation("com.github.bumptech.glide:glide:4.12.0")
 

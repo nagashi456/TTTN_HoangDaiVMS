@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Map container: MapView được tạo programmatically và add vào container -->
+    <FrameLayout
+        android:id="@+id/map_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- Search bar overlay -->
+    <LinearLayout
+        android:id="@+id/search_row"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@drawable/bg_search_bar_rounded"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:elevation="6dp">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="6dp"
+            android:src="@drawable/ic_search"
+            android:contentDescription="search"/>
+
+        <EditText
+            android:id="@+id/etSearch"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:hint="Tìm theo biển số hoặc tên lái xe"
+            android:background="@android:color/transparent"
+            android:singleLine="true"
+            android:paddingStart="8dp"
+            android:inputType="text"/>
+
+        <ImageView
+            android:id="@+id/ivFilter"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="6dp"
+            android:src="@drawable/ic_filter"
+            android:contentDescription="filter"/>
+    </LinearLayout>
+
+    <!-- Vehicle detail card overlay (ẩn mặc định) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_vehicle_detail"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="72dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="10dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp">
+
+            <ImageView
+                android:id="@+id/ivDetailClose"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_alignParentEnd="true"
+                android:src="@drawable/close"
+                android:contentDescription="close" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_toStartOf="@id/ivDetailClose"
+                android:layout_alignParentStart="true"
+                android:layout_marginEnd="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvDetailTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Thông tin phương tiện:"
+                        android:textStyle="bold"
+                        android:textSize="16sp"
+                        android:textColor="#111"/>
+
+                    <!-- Content: we will populate programmatically into tvDetailContent -->
+                    <TextView
+                        android:id="@+id/tvDetailContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#222"
+                        android:layout_marginTop="8dp"
+                        android:textSize="14sp"/>
+
+                    <!-- small gap -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="6dp"/>
+                </LinearLayout>
+            </ScrollView>
+        </RelativeLayout>
+    </androidx.cardview.widget.CardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

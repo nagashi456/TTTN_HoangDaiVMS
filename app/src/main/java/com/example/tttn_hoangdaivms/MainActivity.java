@@ -8,6 +8,9 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import com.example.tttn_hoangdaivms.Map.VehicleMapFragment;
+import com.example.tttn_hoangdaivms.R;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
@@ -16,6 +19,7 @@ import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.Database.User;
 import com.example.tttn_hoangdaivms.DriverList.DriverListFragment;
 import com.example.tttn_hoangdaivms.Home.HomeFragement;
+import com.example.tttn_hoangdaivms.Report.ReportListFragment;
 import com.example.tttn_hoangdaivms.Request.RequestFragement;
 import com.example.tttn_hoangdaivms.VehicleDetail.VehicleDetailFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -65,8 +69,12 @@ public class MainActivity extends AppCompatActivity {
         // Ẩn menu "Yêu cầu" nếu không phải quản lý
         Menu menu = bottomNavigation.getMenu();
         MenuItem requestItem = menu.findItem(R.id.nav_request);
+        MenuItem tripItem = menu.findItem(R.id.nav_trip);
+        MenuItem reportItem = menu.findItem(R.id.nav_report);
         if (!"Admin".equalsIgnoreCase(userRole)) {
             requestItem.setVisible(false);
+            tripItem.setVisible(false);
+            reportItem.setVisible(false);
         }
 
         // Mặc định load HomeFragment khi mở app
@@ -154,13 +162,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             } else if (item.getItemId() == R.id.nav_trip) {
                 if ("Admin".equalsIgnoreCase(userRole)) {
-                    Toast.makeText(this, "Hành trình chưa có chức năng", Toast.LENGTH_SHORT).show();
+                    fragment = new VehicleMapFragment();
                 } else {
                     return false;
                 }
             } else if (item.getItemId() == R.id.nav_report) {
                 if ("Admin".equalsIgnoreCase(userRole)) {
-                    Toast.makeText(this, "Báo cáo chưa có chức năng", Toast.LENGTH_SHORT).show();
+                    fragment = new ReportListFragment();
                 } else {
                     return false;
                 }
