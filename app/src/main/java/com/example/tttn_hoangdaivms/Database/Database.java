@@ -9,15 +9,20 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
 /**
- * Database helper - updated to match new schema and include SucKhoe table.
+ * Database helper - updated to include TrangThaiUpdatedAt column and safer upgrade.
  */
 public class Database extends SQLiteOpenHelper {
 
     private static final String TAG = "Database";
     private static final String DATABASE_NAME = "DriverApp.db";
-    // tăng version vì đổi schema
-    private static final int DATABASE_VERSION = 4;
+    // tăng version vì đổi schema (thêm cột TrangThaiUpdatedAt)
+    private static final int DATABASE_VERSION = 5;
 
     public Database(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -38,7 +43,7 @@ public class Database extends SQLiteOpenHelper {
                 "MatKhau TEXT NOT NULL" +
                 ");");
 
-        // 2) NguoiDung
+        // 2) NguoiDung (thêm TrangThaiUpdatedAt)
         db.execSQL("CREATE TABLE IF NOT EXISTS NguoiDung (" +
                 "MaNguoiDung INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "MaTaiKhoan INTEGER NOT NULL, " +
@@ -49,6 +54,7 @@ public class Database extends SQLiteOpenHelper {
                 "SDT TEXT, " +
                 "VaiTro TEXT, " +
                 "TrangThai TEXT DEFAULT 'Đang duyệt', " +
+                "TrangThaiUpdatedAt TEXT, " +
                 "FOREIGN KEY (MaTaiKhoan) REFERENCES TaiKhoan(MaTaiKhoan) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
@@ -147,27 +153,29 @@ public class Database extends SQLiteOpenHelper {
                 "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
-        // Dữ liệu mặc định admin
+        // Dữ liệu mặc định admin (kèm TrangThaiUpdatedAt)
+        String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (1, 'admin@vms.com', '123456');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai) " +
-                "VALUES (1, 1, 'Quản trị viên hệ thống', '1990-01-01', 'Nam', '0123456789', '0909123456', 'Admin', 'Đã duyệt');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
+                "VALUES (1, 1, 'Quản trị viên hệ thống', '1990-01-01', 'Nam', '0123456789', '0909123456', 'Admin', 'Đã duyệt', '2024-1-20 10:20:50');");
 
         // ---------------------------
-        // Dữ liệu mẫu (sample data)
+        // Dữ liệu mẫu (sample data) - bao gồm TrangThaiUpdatedAt
         // ---------------------------
+        String sampleTime = now;
 
         // TaiKhoan mẫu
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (2, 'driver3@vms.com', 'driver123');");
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (3, 'driver4@vms.com', 'driver123');");
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (4, 'staff2@vms.com', 'staff123');");
 
-        // NguoiDung mẫu
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai) " +
-                "VALUES (2, 2, 'Phạm Văn D', '1991-03-18', 'Nam', '555666777888', '0911222333', 'Nhân viên', 'Đã duyệt');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai) " +
-                "VALUES (3, 3, 'Ngô Thị E', '1993-12-22', 'Nữ', '666777888999', '0988111222', 'Nhân viên', 'Đã duyệt');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai) " +
-                "VALUES (4, 4, 'Hoàng Văn F', '1989-08-15', 'Nam', '777888999000', '0900777888', 'Nhân viên', 'Đã duyệt');");
+        // NguoiDung mẫu (kèm TrangThaiUpdatedAt = sampleTime)
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
+                "VALUES (2, 2, 'Phạm Văn D', '1991-03-18', 'Nam', '555666777888', '0911222333', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
+                "VALUES (3, 3, 'Ngô Thị E', '1993-12-22', 'Nữ', '666777888999', '0988111222', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
+                "VALUES (4, 4, 'Hoàng Văn F', '1989-08-15', 'Nam', '777888999000', '0900777888', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
 
         // Xe mẫu
         db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
@@ -218,24 +226,44 @@ public class Database extends SQLiteOpenHelper {
                 "VALUES (1, 1, '2025-11-10 08:30:00', 10.762622, 106.660172, 50, 'Quận 3, TP.HCM', 'Đang chạy');");
         db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
                 "VALUES (2, 2, '2025-11-09 14:30:00', 16.054406, 108.202167, 0, 'Hải Châu, Đà Nẵng', 'Đỗ');");
-
-
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Dev-only: drop tất cả và tạo lại. (Production: viết migration)
-        db.execSQL("DROP TABLE IF EXISTS Telemetry");
-        db.execSQL("DROP TABLE IF EXISTS PhienLaiXe");
-        db.execSQL("DROP TABLE IF EXISTS ThietBi");
-        db.execSQL("DROP TABLE IF EXISTS BaoTri");
-        db.execSQL("DROP TABLE IF EXISTS BaoHiem");
-        db.execSQL("DROP TABLE IF EXISTS BangCap");
-        db.execSQL("DROP TABLE IF EXISTS SucKhoe");
-        db.execSQL("DROP TABLE IF EXISTS Xe");
-        db.execSQL("DROP TABLE IF EXISTS NguoiDung");
-        db.execSQL("DROP TABLE IF EXISTS TaiKhoan");
-        onCreate(db);
+        // Nếu upgrade từ version cũ, cố gắng chỉ ALTER để thêm cột thiếu (giữ dữ liệu)
+        try {
+            // Kiểm tra bảng NguoiDung có cột TrangThaiUpdatedAt chưa
+            Cursor c = db.rawQuery("PRAGMA table_info(NguoiDung);", null);
+            boolean hasCol = false;
+            if (c != null) {
+                while (c.moveToNext()) {
+                    String name = c.getString(c.getColumnIndexOrThrow("name"));
+                    if ("TrangThaiUpdatedAt".equalsIgnoreCase(name)) {
+                        hasCol = true;
+                        break;
+                    }
+                }
+                c.close();
+            }
+            if (!hasCol) {
+                // thêm cột an toàn
+                db.execSQL("ALTER TABLE NguoiDung ADD COLUMN TrangThaiUpdatedAt TEXT;");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "onUpgrade migration failed, falling back to recreate DB: " + e.getMessage(), e);
+            // fallback: drop & recreate (dev)
+            db.execSQL("DROP TABLE IF EXISTS Telemetry");
+            db.execSQL("DROP TABLE IF EXISTS PhienLaiXe");
+            db.execSQL("DROP TABLE IF EXISTS ThietBi");
+            db.execSQL("DROP TABLE IF EXISTS BaoTri");
+            db.execSQL("DROP TABLE IF EXISTS BaoHiem");
+            db.execSQL("DROP TABLE IF EXISTS BangCap");
+            db.execSQL("DROP TABLE IF EXISTS SucKhoe");
+            db.execSQL("DROP TABLE IF EXISTS Xe");
+            db.execSQL("DROP TABLE IF EXISTS NguoiDung");
+            db.execSQL("DROP TABLE IF EXISTS TaiKhoan");
+            onCreate(db);
+        }
     }
 
     // ---------------------------
@@ -322,6 +350,7 @@ public class Database extends SQLiteOpenHelper {
             nguoiDungValues.put("VaiTro", vaiTro);
             nguoiDungValues.put("TrangThai", trangThai != null ? trangThai : "Đang duyệt");
 
+
             long result = db.insert("NguoiDung", null, nguoiDungValues);
             if (result == -1) {
                 return false;
@@ -338,10 +367,17 @@ public class Database extends SQLiteOpenHelper {
         }
     }
 
+    /**
+     * Cập nhật trạng thái kèm timestamp TrangThaiUpdatedAt.
+     */
     public boolean setUserStatus(String email, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put("TrangThai", status);
+
+        String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        values.put("TrangThaiUpdatedAt", now);
+
         int updated = db.update("NguoiDung", values,
                 "MaTaiKhoan = (SELECT MaTaiKhoan FROM TaiKhoan WHERE Email = ?)",
                 new String[]{email});

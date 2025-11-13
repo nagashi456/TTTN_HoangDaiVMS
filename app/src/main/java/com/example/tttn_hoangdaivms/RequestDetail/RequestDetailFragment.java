@@ -21,13 +21,20 @@ import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.R;
 import com.example.tttn_hoangdaivms.Request.RequestModel;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class RequestDetailFragment extends Fragment {
 
-    private TextView tvFullName, tvCCCD, tvPhone, tvEmail, tvStatus, tvRole;
+    private TextView tvFullName, tvCCCD, tvPhone, tvEmail, tvStatus;
     private Button btnCancel, btnApprove;
     private ImageView btnBack;
     private RequestModel requestModel;
     private int userId = -1;
+
+    // định dạng thời gian: yyyy-MM-dd HH:mm:ss
+    private static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
     @Nullable
     @Override
@@ -42,7 +49,7 @@ public class RequestDetailFragment extends Fragment {
         tvPhone = view.findViewById(R.id.tvPhone);
         tvEmail = view.findViewById(R.id.tvEmail);
         tvStatus = view.findViewById(R.id.tvStatus);
-//        tvRole = view.findViewById(R.id.tvRole); // nếu layout không có, tvRole sẽ là null
+
         btnCancel = view.findViewById(R.id.btnCancel);
         btnApprove = view.findViewById(R.id.btnApprove);
         btnBack = view.findViewById(R.id.btnBack);
@@ -75,12 +82,12 @@ public class RequestDetailFragment extends Fragment {
 
         // Nút Duyệt -> cập nhật status = "Đã duyệt"
         if (btnApprove != null) {
-            btnApprove.setOnClickListener(v -> updateRequestStatus(userId, "Đã duyệt"));
+            btnApprove.setOnClickListener(v -> updateRequestStatusPreserveTimestamp(userId, "Đã duyệt"));
         }
 
         // Nút Hủy -> cập nhật status = "Đã từ chối"
         if (btnCancel != null) {
-            btnCancel.setOnClickListener(v -> updateRequestStatus(userId, "Đã từ chối"));
+            btnCancel.setOnClickListener(v -> updateRequestStatusPreserveTimestamp(userId, "Đã từ chối"));
         }
 
         // Nút quay lại
@@ -92,8 +99,8 @@ public class RequestDetailFragment extends Fragment {
     }
 
     /**
-     * Lấy dữ liệu người dùng từ SQLite (ĐẢM BẢO thứ tự cột tương ứng với SELECT).
-     * SELECT sẽ trả: 0:MaNguoiDung, 1:HoTen, 2:CCCD, 3:SDT, 4:Email, 5:VaiTro, 6:TrangThai, 7:NgaySinh (nếu có)
+     * Load dữ liệu người dùng từ SQLite (bổ sung TrangThaiUpdatedAt).
+     * SELECT trả: 0:MaNguoiDung, 1:HoTen, 2:CCCD, 3:SDT, 4:Email, 5:VaiTro, 6:TrangThai, 7:NgaySinh, 8:TrangThaiUpdatedAt (nếu có)
      */
     private void loadUserDetail(int userId) {
         Database dbHelper = new Database(requireContext());
@@ -102,7 +109,7 @@ public class RequestDetailFragment extends Fragment {
         try {
             db = dbHelper.getReadableDatabase();
             cursor = db.rawQuery(
-                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, ND.VaiTro, ND.TrangThai, ND.NgaySinh " +
+                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, ND.VaiTro, ND.TrangThai, ND.NgaySinh, ND.TrangThaiUpdatedAt " +
                             "FROM NguoiDung ND " +
                             "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE ND.MaNguoiDung = ?",
@@ -117,19 +124,21 @@ public class RequestDetailFragment extends Fragment {
                 String email = safeGet(cursor, 4);
                 String vaiTro = safeGet(cursor, 5);
                 String trangThai = safeGet(cursor, 6);
-                // String ngaySinh = safeGet(cursor, 7); // nếu cần hiển thị
+                String trangThaiUpdatedAt = safeGet(cursor, 8);
 
                 if (tvFullName != null) tvFullName.setText(notEmpty(hoTen, "—"));
                 if (tvCCCD != null) tvCCCD.setText(notEmpty(cccd, "—"));
                 if (tvPhone != null) tvPhone.setText(notEmpty(sdt, "—"));
                 if (tvEmail != null) tvEmail.setText(notEmpty(email, "—"));
-                if (tvRole != null) tvRole.setText(notEmpty(vaiTro, "—"));
 
                 // Hiển thị trạng thái từ DB (ưu tiên đồng bộ với DB)
                 if (tvStatus != null) {
                     tvStatus.setText(notEmpty(trangThai, "—"));
                     setStatusColor(trangThai);
                 }
+
+                // NOTE: không disable nút nữa — chúng luôn có thể bấm. Chỉ hiển thị thông tin thời điểm xử lý nếu bạn muốn
+                // (bạn có thể thêm TextView hiển thị trangThaiUpdatedAt nếu cần)
             } else {
                 Toast.makeText(requireContext(), "Không tìm thấy người dùng!", Toast.LENGTH_SHORT).show();
             }
@@ -143,33 +152,62 @@ public class RequestDetailFragment extends Fragment {
     }
 
     /**
-     * Cập nhật trạng thái trong bảng NguoiDung.
-     * Sau khi cập nhật thành công sẽ gọi lại loadUserDetail để refresh UI.
+     * Cập nhật trạng thái nhưng **không gán lại** TrangThaiUpdatedAt nếu nó đã tồn tại.
+     * - Nếu TrangThaiUpdatedAt NULL/empty: update cả TrangThai và TrangThaiUpdatedAt = now.
+     * - Nếu đã có TrangThaiUpdatedAt: chỉ update TrangThai (không chạm TrangThaiUpdatedAt).
      */
-    private void updateRequestStatus(int userId, String newStatus) {
+    private void updateRequestStatusPreserveTimestamp(int userId, String newStatus) {
         Database dbHelper = new Database(requireContext());
         SQLiteDatabase db = null;
+        Cursor cursor = null;
         try {
             db = dbHelper.getWritableDatabase();
+
+            // Kiểm tra trường TrangThaiUpdatedAt hiện tại
+            cursor = db.rawQuery("SELECT TrangThaiUpdatedAt, TrangThai FROM NguoiDung WHERE MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+            String existingTimestamp = null;
+            String currentStatus = null;
+            if (cursor != null && cursor.moveToFirst()) {
+                existingTimestamp = cursor.isNull(0) ? null : cursor.getString(0);
+                currentStatus = cursor.isNull(1) ? null : cursor.getString(1);
+            }
+            if (cursor != null) { cursor.close(); cursor = null; }
 
             ContentValues values = new ContentValues();
             values.put("TrangThai", newStatus);
 
+            boolean hadTimestamp = existingTimestamp != null && !existingTimestamp.trim().isEmpty();
+
+            if (!hadTimestamp) {
+                // Nếu chưa có timestamp -> set luôn timestamp hiện tại
+                String now = new SimpleDateFormat(DATETIME_FORMAT, Locale.getDefault()).format(new Date());
+                values.put("TrangThaiUpdatedAt", now);
+            } else {
+                // Nếu đã có timestamp -> không thay đổi TrangThaiUpdatedAt
+            }
+
             int rows = db.update("NguoiDung", values, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
 
             if (rows > 0) {
-                Toast.makeText(requireContext(),
-                        "Đã cập nhật trạng thái: " + newStatus, Toast.LENGTH_SHORT).show();
+                // Thông báo rõ ràng cho người dùng
+                if (!hadTimestamp) {
+                    Toast.makeText(requireContext(), "Đã cập nhật trạng thái và ghi thời điểm xử lý.", Toast.LENGTH_SHORT).show();
+                } else {
+                    // Nếu trạng thái không thay đổi với giá trị hiện tại, thông báo tương ứng
+                    if (currentStatus != null && currentStatus.equalsIgnoreCase(newStatus)) {
+                        Toast.makeText(requireContext(), "Trạng thái không thay đổi (đã là \"" + newStatus + "\").", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(requireContext(), "Đã cập nhật trạng thái.", Toast.LENGTH_SHORT).show();
+                    }
+                }
 
                 // Refresh UI từ DB
                 loadUserDetail(userId);
-                //
+
+                // Thông báo cho list fragment reload (dù timestamp không đổi)
                 Bundle result = new Bundle();
                 result.putBoolean("needRefresh", true);
                 getParentFragmentManager().setFragmentResult("request_update", result);
-//                requireActivity().getSupportFragmentManager().popBackStack();
-                // Nếu muốn sau khi từ chối xóa luôn user/tài khoản, có thể thực hiện ở đây.
-                // Ví dụ (KHÔNG BẬT mặc định): nếu (newStatus.equals("Đã từ chối")) { deleteUserAndAccount(userId); }
             } else {
                 Toast.makeText(requireContext(), "Cập nhật thất bại!", Toast.LENGTH_SHORT).show();
             }
@@ -177,6 +215,7 @@ public class RequestDetailFragment extends Fragment {
             e.printStackTrace();
             Toast.makeText(requireContext(), "Lỗi khi cập nhật DB: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         } finally {
+            if (cursor != null) cursor.close();
             if (db != null) db.close();
         }
     }
@@ -202,11 +241,11 @@ public class RequestDetailFragment extends Fragment {
     private void setStatusColor(String status) {
         if (status == null || tvStatus == null) return;
         if (status.equalsIgnoreCase("Đã duyệt")) {
-            tvStatus.setTextColor(Color.parseColor("#00C853"));
+            tvStatus.setTextColor(Color.parseColor("#00C853")); // xanh
         } else if (status.equalsIgnoreCase("Đã từ chối")) {
-            tvStatus.setTextColor(Color.parseColor("#FF0D0D"));
+            tvStatus.setTextColor(Color.parseColor("#FF0D0D")); // đỏ
         } else {
-            tvStatus.setTextColor(Color.parseColor("#005DFF"));
+            tvStatus.setTextColor(Color.parseColor("#005DFF")); // màu mặc định cho 'Đang yêu cầu'
         }
     }
 

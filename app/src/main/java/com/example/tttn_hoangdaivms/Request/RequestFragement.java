@@ -88,23 +88,19 @@ public class RequestFragement extends Fragment {
                 // Cập nhật bản full
                 requestListFull = new ArrayList<>(requestList);
 
-                // Nếu đang có query, áp filter -> adapter sẽ được cập nhật
+                // Áp filter hiện tại (nếu có)
                 String currentQuery = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
-                if (currentQuery.trim().isEmpty()) {
-                    // Cách đơn giản: tạo adapter mới (giữ code ngắn và an toàn)
-                    requestAdapter = new RequestAdapter(requireContext(), requestList, request -> openDetailFragment(request));
-                    recyclerViewRequests.setAdapter(requestAdapter);
-                } else {
-                    // Áp filter với query hiện tại (filterRequests sẽ cập nhật adapter)
-                    filterRequests(currentQuery);
-                }
+                filterRequests(currentQuery);
             }
         });
 
         return view;
     }
 
-    // Lấy danh sách người dùng có vai trò là nhân viên hoặc tài xế
+    /**
+     * Load danh sách người dùng có vai trò là nhân viên hoặc tài xế.
+     * Chú ý: query loại bỏ những record đã "Đã duyệt"/"Đã từ chối" nếu TrangThaiUpdatedAt <= now - 24 hours.
+     */
     private void loadRequestsFromDatabase() {
         requestList = new ArrayList<>();
         SQLiteDatabase db = null;
@@ -113,14 +109,19 @@ public class RequestFragement extends Fragment {
         try {
             db = dbHelper.getReadableDatabase();
 
-            // Lấy cả TrangThai từ DB (không hardcode)
-            cursor = db.rawQuery(
+            // Query: lấy user theo vai trò, và **loại bỏ** những bản ghi đã duyệt / từ chối mà đã quá 24 giờ kể từ TrangThaiUpdatedAt
+            // Lưu ý: định dạng TrangThaiUpdatedAt lưu theo "YYYY-MM-DD HH:MM:SS" để sqlite datetime() xử lý chính xác.
+            String sql =
                     "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, COALESCE(ND.TrangThai, 'Đang yêu cầu'), COALESCE(ND.NgaySinh, '') " +
                             "FROM NguoiDung ND " +
                             "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
-                            "WHERE lower(COALESCE(ND.VaiTro, '')) LIKE ? OR lower(COALESCE(ND.VaiTro, '')) LIKE ?",
-                    new String[]{"%nhân viên%", "%tài%"}
-            );
+                            "WHERE ( lower(COALESCE(ND.VaiTro, '')) LIKE ? OR lower(COALESCE(ND.VaiTro, '')) LIKE ? ) " +
+                            "AND NOT ( (ND.TrangThai IN ('Đã duyệt','Đã từ chối')) " +
+                            "          AND (ND.TrangThaiUpdatedAt IS NOT NULL) " +
+                            "          AND (datetime(ND.TrangThaiUpdatedAt) <= datetime('now','-24 hours')) ) " +
+                            "ORDER BY ND.MaNguoiDung DESC";
+
+            cursor = db.rawQuery(sql, new String[]{"%nhân viên%", "%tài%"});
 
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -132,7 +133,7 @@ public class RequestFragement extends Fragment {
                     String status = cursor.isNull(5) ? "Đang yêu cầu" : cursor.getString(5);
                     String date = cursor.isNull(6) ? "" : cursor.getString(6);
 
-                    // RequestModel phải có constructor phù hợp và setUserId/getUserId
+                    // RequestModel phải có constructor phù hợp
                     RequestModel model = new RequestModel(userId, name, cccd, phone, email, status, date);
                     requestList.add(model);
                 } while (cursor.moveToNext());
@@ -145,12 +146,12 @@ public class RequestFragement extends Fragment {
         }
     }
 
-    // Mở màn chi tiết; truyền luôn user_id để fragment chi tiết có thể cập nhật/xóa đúng bản ghi
+    // Mở màn chi tiết; truyền user_id để fragment chi tiết có thể cập nhật/xóa đúng bản ghi
+    // NOTE: không gửi toàn object qua bundle để tránh lỗi nếu model không implement Serializable
     private void openDetailFragment(RequestModel request) {
         RequestDetailFragment detailFragment = new RequestDetailFragment();
 
         Bundle bundle = new Bundle();
-        bundle.putSerializable("request", request);
         bundle.putInt("user_id", request.getUserId());
         detailFragment.setArguments(bundle);
 
@@ -165,6 +166,8 @@ public class RequestFragement extends Fragment {
     private void filterRequests(String query) {
         String q = query == null ? "" : query.trim().toLowerCase();
         List<RequestModel> filtered = new ArrayList<>();
+
+        if (requestListFull == null) requestListFull = new ArrayList<>();
 
         if (q.isEmpty()) {
             filtered.addAll(requestListFull);
@@ -183,15 +186,8 @@ public class RequestFragement extends Fragment {
             }
         }
 
-        // Cập nhật adapter: tạo adapter mới hoặc cập nhật data nếu adapter hỗ trợ method update
-        if (requestAdapter != null) {
-            // Nếu adapter có method updateData(List<RequestModel>) bạn có thể gọi nó.
-            // Vì không chắc adapter của bạn có hay không, mình sẽ tạo adapter mới (an toàn).
-            requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
-            recyclerViewRequests.setAdapter(requestAdapter);
-        } else {
-            requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
-            recyclerViewRequests.setAdapter(requestAdapter);
-        }
+        // Cập nhật adapter (tạo mới an toàn)
+        requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
+        recyclerViewRequests.setAdapter(requestAdapter);
     }
 }
