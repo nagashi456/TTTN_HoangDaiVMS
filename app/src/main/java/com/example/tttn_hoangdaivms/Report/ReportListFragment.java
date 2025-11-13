@@ -20,10 +20,12 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.tttn_hoangdaivms.BaoTriDetail.BaoTriDetailFragment;
 import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.R;
 import com.example.tttn_hoangdaivms.Report.ReportAdapter;
 import com.example.tttn_hoangdaivms.Report.ReportModel;
+import com.example.tttn_hoangdaivms.TripDetail.TripDetailFragment;
 
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.xssf.usermodel.XSSFCell;
@@ -81,7 +83,18 @@ public class ReportListFragment extends Fragment {
 
         // Report (Hành trình) adapter
         reportAdapter = new ReportAdapter(new ArrayList<>(), new ReportAdapter.OnItemAction() {
-            @Override public void onItemClicked(ReportModel item) {}
+            @Override
+            public void onItemClicked(ReportModel item) {
+                // mở TripDetailFragment theo MaPhien (int)
+                TripDetailFragment detailFragment = TripDetailFragment.newInstance(item.maPhien);
+
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, detailFragment)
+                        .addToBackStack(null)
+                        .commit();
+            }
+
             @Override public void onSelectionChanged() {}
         });
 
@@ -257,8 +270,22 @@ public class ReportListFragment extends Fragment {
         allBaoTriList = new ArrayList<>(list);
 
         // tạo adapter và gán cho RecyclerView
-        baoTriAdapter = new BaoTriAdapter(list, () -> {
-            // selection changed - you can update UI if needed
+        baoTriAdapter = new BaoTriAdapter(list, new BaoTriAdapter.OnItemAction() {
+            @Override
+            public void onSelectionChanged() {
+                // selection changed - you can update UI if needed
+            }
+
+            @Override
+            public void onItemClicked(BaoTriModel item) {
+                // mở BaoTriDetailFragment truyền MaBaoTri (an toàn)
+                BaoTriDetailFragment detail = BaoTriDetailFragment.newInstanceWithId(item.maBaoTri);
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.containerMain, detail)
+                        .addToBackStack(null)
+                        .commit();
+            }
         });
         rv.setAdapter(baoTriAdapter);
     }

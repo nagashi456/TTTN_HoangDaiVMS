@@ -1,6 +1,5 @@
 package com.example.tttn_hoangdaivms.Report;
 
-
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,6 +24,7 @@ public class BaoTriAdapter extends RecyclerView.Adapter<BaoTriAdapter.VH> {
 
     public interface OnItemAction {
         void onSelectionChanged();
+        void onItemClicked(BaoTriModel item); // gọi khi nhấn item -> mở detail
     }
 
     private List<BaoTriModel> list;
@@ -77,7 +77,7 @@ public class BaoTriAdapter extends RecyclerView.Adapter<BaoTriAdapter.VH> {
         }
         holder.tvPlateWithStatus.setText(display);
 
-        // Checkbox handling
+        // Checkbox handling (detach listener trước khi set để tránh callback không mong muốn)
         holder.checkSelect.setOnCheckedChangeListener(null);
         holder.checkSelect.setChecked(item.isSelected);
         holder.checkSelect.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -85,12 +85,18 @@ public class BaoTriAdapter extends RecyclerView.Adapter<BaoTriAdapter.VH> {
             if (listener != null) listener.onSelectionChanged();
         });
 
-        // whole item click toggles checkbox
+        // Click item -> mở detail (onItemClicked)
         holder.itemView.setOnClickListener(v -> {
+            if (listener != null) listener.onItemClicked(item);
+        });
+
+        // Long click -> toggle selection (tiện khi user muốn chọn nhiều)
+        holder.itemView.setOnLongClickListener(v -> {
             boolean newVal = !item.isSelected;
             item.isSelected = newVal;
             holder.checkSelect.setChecked(newVal);
             if (listener != null) listener.onSelectionChanged();
+            return true;
         });
     }
 
@@ -106,7 +112,11 @@ public class BaoTriAdapter extends RecyclerView.Adapter<BaoTriAdapter.VH> {
         VH(@NonNull View itemView) {
             super(itemView);
             checkSelect = itemView.findViewById(R.id.checkSelect);
-            tvPlateWithStatus = itemView.findViewById(R.id.tvPlateWithStatus);
+
+            // Hỗ trợ 2 id khác nhau trong layout item: tvPlateWithStatus (mới) hoặc tvTitle (cũ)
+            TextView t = itemView.findViewById(R.id.tvPlateWithStatus);
+            if (t == null) t = itemView.findViewById(R.id.tvTitle);
+            tvPlateWithStatus = t != null ? t : new TextView(itemView.getContext());
         }
     }
 
