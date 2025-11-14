@@ -52,7 +52,7 @@ public class RequestFragement extends Fragment {
         // Load lần đầu
         loadRequestsFromDatabase();
 
-        // Lưu bản đầy đủ để filter/restore
+        // Lưu bản đầy đủ để filter/restore (hiển thị sẽ dùng DateCreated)
         requestListFull = new ArrayList<>(requestList);
 
         // Tạo adapter lần đầu với requestList hiện tại
@@ -100,6 +100,7 @@ public class RequestFragement extends Fragment {
     /**
      * Load danh sách người dùng có vai trò là nhân viên hoặc tài xế.
      * Chú ý: query loại bỏ những record đã "Đã duyệt"/"Đã từ chối" nếu TrangThaiUpdatedAt <= now - 24 hours.
+     * Ngày hiển thị sẽ là DateCreated (không phải NgaySinh).
      */
     private void loadRequestsFromDatabase() {
         requestList = new ArrayList<>();
@@ -112,7 +113,7 @@ public class RequestFragement extends Fragment {
             // Query: lấy user theo vai trò, và **loại bỏ** những bản ghi đã duyệt / từ chối mà đã quá 24 giờ kể từ TrangThaiUpdatedAt
             // Lưu ý: định dạng TrangThaiUpdatedAt lưu theo "YYYY-MM-DD HH:MM:SS" để sqlite datetime() xử lý chính xác.
             String sql =
-                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, COALESCE(ND.TrangThai, 'Đang yêu cầu'), COALESCE(ND.NgaySinh, '') " +
+                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, COALESCE(ND.TrangThai, 'Đang yêu cầu'), COALESCE(ND.DateCreated, '') " +
                             "FROM NguoiDung ND " +
                             "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE ( lower(COALESCE(ND.VaiTro, '')) LIKE ? OR lower(COALESCE(ND.VaiTro, '')) LIKE ? ) " +
@@ -131,10 +132,11 @@ public class RequestFragement extends Fragment {
                     String phone = cursor.isNull(3) ? "" : cursor.getString(3);
                     String email = cursor.isNull(4) ? "" : cursor.getString(4);
                     String status = cursor.isNull(5) ? "Đang yêu cầu" : cursor.getString(5);
-                    String date = cursor.isNull(6) ? "" : cursor.getString(6);
+                    // NOTE: column 6 is now DateCreated
+                    String dateCreated = cursor.isNull(6) ? "" : cursor.getString(6);
 
                     // RequestModel phải có constructor phù hợp
-                    RequestModel model = new RequestModel(userId, name, cccd, phone, email, status, date);
+                    RequestModel model = new RequestModel(userId, name, cccd, phone, email, status, dateCreated);
                     requestList.add(model);
                 } while (cursor.moveToNext());
             }

@@ -10,19 +10,18 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
 /**
- * Database helper - updated to include TrangThaiUpdatedAt column and safer upgrade.
+ * Database helper - updated to include TrangThaiUpdatedAt and DateCreated columns and safer upgrade.
  */
 public class Database extends SQLiteOpenHelper {
 
     private static final String TAG = "Database";
     private static final String DATABASE_NAME = "DriverApp.db";
-    // tăng version vì đổi schema (thêm cột TrangThaiUpdatedAt)
-    private static final int DATABASE_VERSION = 5;
+    // tăng version vì đổi schema (thêm cột TrangThaiUpdatedAt và DateCreated)
+    private static final int DATABASE_VERSION = 6;
 
     public Database(@Nullable Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -43,7 +42,7 @@ public class Database extends SQLiteOpenHelper {
                 "MatKhau TEXT NOT NULL" +
                 ");");
 
-        // 2) NguoiDung (thêm TrangThaiUpdatedAt)
+        // 2) NguoiDung (thêm TrangThaiUpdatedAt, DateCreated)
         db.execSQL("CREATE TABLE IF NOT EXISTS NguoiDung (" +
                 "MaNguoiDung INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "MaTaiKhoan INTEGER NOT NULL, " +
@@ -55,6 +54,7 @@ public class Database extends SQLiteOpenHelper {
                 "VaiTro TEXT, " +
                 "TrangThai TEXT DEFAULT 'Đang duyệt', " +
                 "TrangThaiUpdatedAt TEXT, " +
+                "DateCreated TEXT, " +
                 "FOREIGN KEY (MaTaiKhoan) REFERENCES TaiKhoan(MaTaiKhoan) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 
@@ -152,32 +152,31 @@ public class Database extends SQLiteOpenHelper {
                 "TrangThaiXe TEXT, " +
                 "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
+// ---------------------------
+// Dữ liệu mẫu (với TrangThaiUpdatedAt và DateCreated cụ thể)
+// ---------------------------
 
-        // Dữ liệu mặc định admin (kèm TrangThaiUpdatedAt)
-        String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+// Admin (đã tạo và duyệt từ lâu)
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (1, 'admin@vms.com', '123456');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
-                "VALUES (1, 1, 'Quản trị viên hệ thống', '1990-01-01', 'Nam', '0123456789', '0909123456', 'Admin', 'Đã duyệt', '2024-1-20 10:20:50');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (1, 1, 'Quản trị viên hệ thống', '1990-01-01', 'Nam', '0123456789', '0909123456', 'Admin', 'Đã duyệt', '2025-10-01 09:00:00', '2025-10-01 09:00:00');");
 
-        // ---------------------------
-        // Dữ liệu mẫu (sample data) - bao gồm TrangThaiUpdatedAt
-        // ---------------------------
-        String sampleTime = now;
-
-        // TaiKhoan mẫu
+// Tài khoản mẫu 2: đã duyệt cách đây vài ngày (older than 24h)
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (2, 'driver3@vms.com', 'driver123');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (2, 2, 'Phạm Văn D', '1991-03-18', 'Nam', '555666777888', '0911222333', 'Nhân viên', 'Đã duyệt', '2025-11-10 08:30:00', '2025-10-20 14:15:00');");
+
+// Tài khoản mẫu 3: đã duyệt cách đây nhiều ngày (older than 24h)
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (3, 'driver4@vms.com', 'driver123');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (3, 3, 'Ngô Thị E', '1993-12-22', 'Nữ', '666777888999', '0988111222', 'Nhân viên', 'Đã duyệt', '2025-11-07 10:45:00', '2025-10-25 11:00:00');");
+
+// Tài khoản mẫu 4: vừa mới được duyệt (ví dụ trong vòng 24 giờ -> dùng để test rule)
         db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (4, 'staff2@vms.com', 'staff123');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (4, 4, 'Hoàng Văn F', '1989-08-15', 'Nam', '777888999000', '0900777888', 'Nhân viên', 'Đã duyệt', '2025-11-14 07:30:00', '2025-11-02 16:20:00');");
 
-        // NguoiDung mẫu (kèm TrangThaiUpdatedAt = sampleTime)
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
-                "VALUES (2, 2, 'Phạm Văn D', '1991-03-18', 'Nam', '555666777888', '0911222333', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
-                "VALUES (3, 3, 'Ngô Thị E', '1993-12-22', 'Nữ', '666777888999', '0988111222', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
-        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt) " +
-                "VALUES (4, 4, 'Hoàng Văn F', '1989-08-15', 'Nam', '777888999000', '0900777888', 'Nhân viên', 'Đã duyệt', '2024-1-20 10:20:50');");
-
-        // Xe mẫu
+// Xe mẫu
         db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
                 "VALUES (1, 2, '51C-444.44', 'Xe tải', 'HINO', 'Vàng', 'HX-04', 'Diesel', 60000, 'Đang sử dụng');");
         db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
@@ -185,69 +184,71 @@ public class Database extends SQLiteOpenHelper {
         db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
                 "VALUES (3, NULL, '53E-666.66', 'Xe tải', 'ISUZU', 'Trắng', 'IS-06', 'Diesel', 45000, 'Sẵn sàng');");
 
-        // BaoTri mẫu
+// BaoTri mẫu
         db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
                 "VALUES (1, 2, '2025-05-15', 'Thay dầu, kiểm tra lốp', 'Xưởng C');");
         db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
                 "VALUES (2, 3, '2024-10-01', 'Thay má phanh, kiểm tra động cơ', 'Xưởng D');");
 
-        // BaoHiem mẫu
+// BaoHiem mẫu
         db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
                 "VALUES (1, 2, 'BH-003', 'GHI Insurance', '2025-02-01', '2026-01-31');");
         db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
                 "VALUES (2, 3, 'BH-004', 'JKL Insurance', '2025-03-01', '2026-02-28');");
 
-        // SucKhoe mẫu
+// SucKhoe mẫu
         db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
                 "VALUES (1, 1, 172, 68, 'Không', '2025-04-01', '0', 'Đạt');");
         db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
                 "VALUES (2, 2, 165, 58, 'Không', '2025-04-05', '0', 'Đạt');");
 
-        // BangCap mẫu
+// BangCap mẫu
         db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
                 "VALUES (1, 2, 'FE', 'FE-003', '2021-01-01', '2031-01-01', 'Hà Nội', 'Hợp lệ');");
         db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
                 "VALUES (2, 3, 'CE', 'CE-004', '2022-05-01', '2032-05-01', 'Đà Nẵng', 'Hợp lệ');");
 
-        // ThietBi mẫu
+// ThietBi mẫu
         db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
                 "VALUES (1, 1, 'Online', '2025-11-10 09:00:00');");
         db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
                 "VALUES (2, 2, 'Offline', '2025-11-09 15:00:00');");
 
-        // PhienLaiXe mẫu
+// PhienLaiXe mẫu
         db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
                 "VALUES (1, 1, '2025-11-10 06:30:00', '2025-11-10 16:30:00', 10, 220);");
         db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
                 "VALUES (2, 2, '2025-11-09 07:00:00', '2025-11-09 17:00:00', 10, 240);");
 
-        // Telemetry mẫu
+// Telemetry mẫu
         db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
                 "VALUES (1, 1, '2025-11-10 08:30:00', 10.762622, 106.660172, 50, 'Quận 3, TP.HCM', 'Đang chạy');");
         db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
                 "VALUES (2, 2, '2025-11-09 14:30:00', 16.054406, 108.202167, 0, 'Hải Châu, Đà Nẵng', 'Đỗ');");
+
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         // Nếu upgrade từ version cũ, cố gắng chỉ ALTER để thêm cột thiếu (giữ dữ liệu)
         try {
-            // Kiểm tra bảng NguoiDung có cột TrangThaiUpdatedAt chưa
+            // Kiểm tra bảng NguoiDung có các cột TrangThaiUpdatedAt / DateCreated chưa
             Cursor c = db.rawQuery("PRAGMA table_info(NguoiDung);", null);
-            boolean hasCol = false;
+            boolean hasTrangThaiUpdatedAt = false;
+            boolean hasDateCreated = false;
             if (c != null) {
                 while (c.moveToNext()) {
                     String name = c.getString(c.getColumnIndexOrThrow("name"));
-                    if ("TrangThaiUpdatedAt".equalsIgnoreCase(name)) {
-                        hasCol = true;
-                        break;
-                    }
+                    if ("TrangThaiUpdatedAt".equalsIgnoreCase(name)) hasTrangThaiUpdatedAt = true;
+                    if ("DateCreated".equalsIgnoreCase(name)) hasDateCreated = true;
                 }
                 c.close();
             }
-            if (!hasCol) {
-                // thêm cột an toàn
+            if (!hasTrangThaiUpdatedAt) {
                 db.execSQL("ALTER TABLE NguoiDung ADD COLUMN TrangThaiUpdatedAt TEXT;");
+            }
+            if (!hasDateCreated) {
+                db.execSQL("ALTER TABLE NguoiDung ADD COLUMN DateCreated TEXT;");
             }
         } catch (Exception e) {
             Log.w(TAG, "onUpgrade migration failed, falling back to recreate DB: " + e.getMessage(), e);
@@ -350,6 +351,9 @@ public class Database extends SQLiteOpenHelper {
             nguoiDungValues.put("VaiTro", vaiTro);
             nguoiDungValues.put("TrangThai", trangThai != null ? trangThai : "Đang duyệt");
 
+            // set DateCreated = now
+            String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+            nguoiDungValues.put("DateCreated", now);
 
             long result = db.insert("NguoiDung", null, nguoiDungValues);
             if (result == -1) {

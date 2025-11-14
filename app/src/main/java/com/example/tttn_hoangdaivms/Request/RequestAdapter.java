@@ -38,7 +38,6 @@ public class RequestAdapter extends RecyclerView.Adapter<RequestAdapter.ViewHold
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView ivMenu;
         TextView tvName, tvStatus, tvDate;
         CardView cardContainer;
 
