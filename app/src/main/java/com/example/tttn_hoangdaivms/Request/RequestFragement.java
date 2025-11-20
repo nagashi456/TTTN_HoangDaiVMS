@@ -9,6 +9,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,6 +35,9 @@ public class RequestFragement extends Fragment {
     private EditText searchEditText;
     private List<RequestModel> requestListFull; // bản đầy đủ để restore/filter
 
+    // text hiển thị khi không có kết quả
+    private TextView tvEmpty;
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -46,6 +50,7 @@ public class RequestFragement extends Fragment {
         recyclerViewRequests.setLayoutManager(new LinearLayoutManager(requireContext()));
 
         searchEditText = view.findViewById(R.id.searchEditText); // đảm bảo layout có EditText với id này
+        tvEmpty = view.findViewById(R.id.tvEmpty); // đảm bảo layout có TextView với id này
 
         dbHelper = new Database(requireContext());
 
@@ -58,6 +63,9 @@ public class RequestFragement extends Fragment {
         // Tạo adapter lần đầu với requestList hiện tại
         requestAdapter = new RequestAdapter(requireContext(), requestList, request -> openDetailFragment(request));
         recyclerViewRequests.setAdapter(requestAdapter);
+
+        // cập nhật hiển thị empty view sau khi gán adapter lần đầu
+        updateEmptyView(requestList);
 
         // set up search watcher
         searchEditText.addTextChangedListener(new TextWatcher() {
@@ -102,6 +110,8 @@ public class RequestFragement extends Fragment {
      * Chú ý: query loại bỏ những record đã "Đã duyệt"/"Đã từ chối" nếu TrangThaiUpdatedAt <= now - 24 hours.
      * Ngày hiển thị sẽ là DateCreated (không phải NgaySinh).
      */
+// ... bên trong class RequestFragement
+
     private void loadRequestsFromDatabase() {
         requestList = new ArrayList<>();
         SQLiteDatabase db = null;
@@ -110,8 +120,7 @@ public class RequestFragement extends Fragment {
         try {
             db = dbHelper.getReadableDatabase();
 
-            // Query: lấy user theo vai trò, và **loại bỏ** những bản ghi đã duyệt / từ chối mà đã quá 24 giờ kể từ TrangThaiUpdatedAt
-            // Lưu ý: định dạng TrangThaiUpdatedAt lưu theo "YYYY-MM-DD HH:MM:SS" để sqlite datetime() xử lý chính xác.
+            // Chúng ta chuyển ND.TrangThaiUpdatedAt (dd/MM/yyyy HH:mm:ss) sang ISO yyyy-MM-dd HH:mm:ss tạm thời trong query
             String sql =
                     "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, TK.Email, COALESCE(ND.TrangThai, 'Đang yêu cầu'), COALESCE(ND.DateCreated, '') " +
                             "FROM NguoiDung ND " +
@@ -119,7 +128,8 @@ public class RequestFragement extends Fragment {
                             "WHERE ( lower(COALESCE(ND.VaiTro, '')) LIKE ? OR lower(COALESCE(ND.VaiTro, '')) LIKE ? ) " +
                             "AND NOT ( (ND.TrangThai IN ('Đã duyệt','Đã từ chối')) " +
                             "          AND (ND.TrangThaiUpdatedAt IS NOT NULL) " +
-                            "          AND (datetime(ND.TrangThaiUpdatedAt) <= datetime('now','-24 hours')) ) " +
+                            // chuyển dd/MM/yyyy HH:MM:SS -> yyyy-MM-dd HH:MM:SS rồi so sánh
+                            "          AND ( datetime( substr(ND.TrangThaiUpdatedAt,7,4) || '-' || substr(ND.TrangThaiUpdatedAt,4,2) || '-' || substr(ND.TrangThaiUpdatedAt,1,2) || ' ' || substr(ND.TrangThaiUpdatedAt,12) ) <= datetime('now','-24 hours') ) ) " +
                             "ORDER BY ND.MaNguoiDung DESC";
 
             cursor = db.rawQuery(sql, new String[]{"%nhân viên%", "%tài%"});
@@ -132,10 +142,8 @@ public class RequestFragement extends Fragment {
                     String phone = cursor.isNull(3) ? "" : cursor.getString(3);
                     String email = cursor.isNull(4) ? "" : cursor.getString(4);
                     String status = cursor.isNull(5) ? "Đang yêu cầu" : cursor.getString(5);
-                    // NOTE: column 6 is now DateCreated
                     String dateCreated = cursor.isNull(6) ? "" : cursor.getString(6);
 
-                    // RequestModel phải có constructor phù hợp
                     RequestModel model = new RequestModel(userId, name, cccd, phone, email, status, dateCreated);
                     requestList.add(model);
                 } while (cursor.moveToNext());
@@ -147,6 +155,7 @@ public class RequestFragement extends Fragment {
             if (db != null) db.close();
         }
     }
+
 
     // Mở màn chi tiết; truyền user_id để fragment chi tiết có thể cập nhật/xóa đúng bản ghi
     // NOTE: không gửi toàn object qua bundle để tránh lỗi nếu model không implement Serializable
@@ -191,5 +200,22 @@ public class RequestFragement extends Fragment {
         // Cập nhật adapter (tạo mới an toàn)
         requestAdapter = new RequestAdapter(requireContext(), filtered, request -> openDetailFragment(request));
         recyclerViewRequests.setAdapter(requestAdapter);
+
+        // cập nhật empty view
+        updateEmptyView(filtered);
+    }
+
+    /**
+     * Hiển thị hoặc ẩn TextView thông báo khi danh sách rỗng.
+     */
+    private void updateEmptyView(List<RequestModel> list) {
+        if (tvEmpty == null || recyclerViewRequests == null) return;
+        if (list == null || list.isEmpty()) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            recyclerViewRequests.setVisibility(View.GONE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+            recyclerViewRequests.setVisibility(View.VISIBLE);
+        }
     }
 }

@@ -23,6 +23,7 @@ import androidx.fragment.app.FragmentManager;
 
 import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.Profile.EditProfileFragment;
+import com.example.tttn_hoangdaivms.EditDriver.EditDriverFragment; // <-- import mới
 import com.example.tttn_hoangdaivms.R;
 
 public class DriverDetail extends Fragment {
@@ -60,6 +61,9 @@ public class DriverDetail extends Fragment {
 
     // Data
     private String name, phone, email;
+
+    // store idArg so btnEdit can use it
+    private String idArg = null;
 
     // Colors
     private final int COLOR_HINT = Color.parseColor("#A0A0A0");
@@ -155,8 +159,8 @@ public class DriverDetail extends Fragment {
         tvAddress = view.findViewById(R.id.tvAddress);
 
         // Lấy args
+        idArg = null;
         Bundle args = getArguments();
-        String idArg = null;
         if (args != null) {
             // Nếu có id => dùng id và query DB
             if (args.containsKey(ARG_ID)) {
@@ -210,15 +214,49 @@ public class DriverDetail extends Fragment {
         ivEmail.setOnClickListener(v -> doCopyEmail());
         tvEmail.setOnClickListener(v -> doCopyEmail());
 
+        // --- CHỈNH SỬA: mở EditDriverFragment khi bấm btnEdit ---
         btnEdit.setOnClickListener(v -> {
-            if (isEmptyString(email)) {
-                Toast.makeText(requireContext(), "Không có email để chỉnh sửa", Toast.LENGTH_SHORT).show();
+            // Determine id to pass to EditDriverFragment
+            String idToPass = idArg;
+
+            // If no idArg, try lookup by email (from member `email` or tvEmail text)
+            if (isEmptyString(idToPass)) {
+                String emailToSearch = email;
+                if (isEmptyString(emailToSearch)) {
+                    // try from TextView (could be hint "—")
+                    String tvEm = getText(tvEmail);
+                    if (!isEmptyString(tvEm) && !tvEm.equals("—")) emailToSearch = tvEm;
+                }
+
+                if (!isEmptyString(emailToSearch)) {
+                    Cursor c = null;
+                    try {
+                        SQLiteDatabase db = dbHelper.getReadableDatabase();
+                        c = db.rawQuery(
+                                "SELECT ND.MaNguoiDung FROM NguoiDung ND JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan WHERE TK.Email = ? LIMIT 1",
+                                new String[]{ emailToSearch }
+                        );
+                        if (c != null && c.moveToFirst()) {
+                            try {
+                                int foundId = c.getInt(0);
+                                idToPass = String.valueOf(foundId);
+                            } catch (Exception ignored) {}
+                        }
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    } finally {
+                        if (c != null) c.close();
+                    }
+                }
+            }
+
+            if (isEmptyString(idToPass)) {
+                Toast.makeText(requireContext(), "Không có ID người dùng để chỉnh sửa.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            EditProfileFragment edit = new EditProfileFragment();
-            Bundle b = new Bundle();
-            b.putString("email", email);
-            edit.setArguments(b);
+
+            // Open EditDriverFragment with the id (string)
+            EditDriverFragment edit = EditDriverFragment.newInstance(idToPass);
             FragmentManager fm = getParentFragmentManager();
             fm.beginTransaction()
                     .replace(R.id.containerMain, edit)
@@ -313,11 +351,6 @@ public class DriverDetail extends Fragment {
             ex.printStackTrace();
         }
     }
-
-
-    /**
-     * Load thông tin bằng id MaNguoiDung (ARG_ID)
-     */
     private void loadFromDatabaseById(String idStr) {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor c = null;

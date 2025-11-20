@@ -77,6 +77,9 @@ public class RequestAdapter extends RecyclerView.Adapter<RequestAdapter.ViewHold
             case "Đã duyệt":
                 holder.tvStatus.setTextColor(Color.parseColor("#00C853")); // xanh lá
                 break;
+            case "Đã khóa":
+                holder.tvStatus.setTextColor(Color.parseColor("#FF0D0D")); // xanh lá
+                break;
             default:
                 holder.tvStatus.setTextColor(Color.parseColor("#000000")); // đen
                 break;

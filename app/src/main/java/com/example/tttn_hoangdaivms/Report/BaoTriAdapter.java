@@ -130,7 +130,7 @@ public class BaoTriAdapter extends RecyclerView.Adapter<BaoTriAdapter.VH> {
         if (dateStr == null || dateStr.trim().isEmpty()) return "";
 
         // Thử hai định dạng phổ biến
-        String[] patterns = new String[] {"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"};
+        String[] patterns = new String[] {"dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy"};
         Date parsed = null;
         for (String p : patterns) {
             try {

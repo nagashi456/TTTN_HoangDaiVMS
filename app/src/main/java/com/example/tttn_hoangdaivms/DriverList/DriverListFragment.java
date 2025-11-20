@@ -52,6 +52,9 @@ public class DriverListFragment extends Fragment {
     private List<VehicleListModel> vehicleListFull;
     private boolean isDriverSelected = true; // track selected segment
 
+    // Empty view
+    private TextView tvEmpty;
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -65,6 +68,9 @@ public class DriverListFragment extends Fragment {
         driverRecyclerView = view.findViewById(R.id.driverRecyclerView);
         fabAdd = view.findViewById(R.id.fabAdd);
         searchEditText = view.findViewById(R.id.searchEditText); // ô search
+
+        // Empty text (bạn cần thêm TextView có id tvEmpty trong layout)
+        tvEmpty = view.findViewById(R.id.tvEmpty);
 
         driverRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         dbHelper = new Database(requireContext());
@@ -87,8 +93,8 @@ public class DriverListFragment extends Fragment {
         driverAdapter = new DriverListAdapter(requireContext(), driverList, driverIds, new DriverListAdapter.OnDriverActionListener() {
             @Override
             public void onDriverClick(DriverListModel driver, int position, String id) {
-                if (position == -1 || id == null) {
-                    int pos = findIndexByNameAndLocation(driver.getName(), driver.getLocation());
+                if ((position == -1 || id == null)) {
+                    int pos = findIndexByNameAndDob(driver.getName(), driver.getDob());
                     if (pos >= 0 && pos < driverIds.size()) id = driverIds.get(pos);
                     position = pos;
                 }
@@ -106,9 +112,8 @@ public class DriverListFragment extends Fragment {
 
             @Override
             public void onEditRequested(DriverListModel driver, int position, String id) {
-                // Mở màn chỉnh sửa (same as click)
                 if (id == null || id.trim().isEmpty()) {
-                    int pos = findIndexByNameAndLocation(driver.getName(), driver.getLocation());
+                    int pos = findIndexByNameAndDob(driver.getName(), driver.getDob());
                     if (pos >= 0 && pos < driverIds.size()) id = driverIds.get(pos);
                     position = pos;
                 }
@@ -171,6 +176,7 @@ public class DriverListFragment extends Fragment {
                             driverAdapter.notifyDataSetChanged();
                             Toast.makeText(requireContext(), "Xóa thành công (cập nhật danh sách).", Toast.LENGTH_SHORT).show();
                         }
+                        updateEmptyView();
                     } else {
                         Toast.makeText(requireContext(), "Xóa thất bại.", Toast.LENGTH_SHORT).show();
                     }
@@ -184,12 +190,10 @@ public class DriverListFragment extends Fragment {
             }
         });
 
-        // ===== Vehicle adapter: listener nhận maXe (int)
-// ===== Vehicle adapter: listener nhận VehicleListModel và xử lý delete/edit với confirm dialog
+        // ===== Vehicle adapter
         vehicleAdapter = new VehicleListAdapter(vehicleList, new VehicleListAdapter.OnItemActionListener() {
             @Override
             public void onItemClick(int maXe) {
-                // mở chi tiết xe
                 VehicleDetailFragment frag = VehicleDetailFragment.newInstance(maXe);
                 requireActivity().getSupportFragmentManager()
                         .beginTransaction()
@@ -200,7 +204,6 @@ public class DriverListFragment extends Fragment {
 
             @Override
             public void onEditRequested(int maXe, int position) {
-                // mở trang edit (EditVehicleFragment)
                 com.example.tttn_hoangdaivms.EditVehicle.EditVehicleFragment editFrag =
                         com.example.tttn_hoangdaivms.EditVehicle.EditVehicleFragment.newInstance(maXe);
                 requireActivity().getSupportFragmentManager()
@@ -212,34 +215,28 @@ public class DriverListFragment extends Fragment {
 
             @Override
             public void onDeleteRequested(int maXe, int position) {
-                // Hiển thị dialog xác nhận trước khi xóa
                 new androidx.appcompat.app.AlertDialog.Builder(requireContext())
                         .setTitle("Xóa xe")
                         .setMessage("Bạn có chắc muốn xóa xe này?")
                         .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                         .setPositiveButton("Xóa", (dialog, which) -> {
-                            // Thực hiện xóa trong background thread để không block UI
                             new Thread(() -> {
                                 android.database.sqlite.SQLiteDatabase db = null;
                                 try {
                                     db = dbHelper.getWritableDatabase();
                                     int rows = db.delete("Xe", "MaXe = ?", new String[]{String.valueOf(maXe)});
                                     if (rows > 0) {
-                                        // Cập nhật UI trên main thread
                                         requireActivity().runOnUiThread(() -> {
                                             int removeIndex = -1;
-                                            // ưu tiên dùng position nếu hợp lệ và khớp
                                             if (position >= 0 && position < vehicleList.size() && vehicleList.get(position).getMaXe() == maXe) {
                                                 removeIndex = position;
                                             } else {
-                                                // fallback: tìm index theo maXe
                                                 for (int i = 0; i < vehicleList.size(); i++) {
                                                     if (vehicleList.get(i).getMaXe() == maXe) { removeIndex = i; break; }
                                                 }
                                             }
 
                                             if (removeIndex >= 0) {
-                                                // xóa khỏi vehicleListFull nếu tồn tại
                                                 if (vehicleListFull != null) {
                                                     for (int i = 0; i < vehicleListFull.size(); i++) {
                                                         if (vehicleListFull.get(i).getMaXe() == maXe) {
@@ -251,7 +248,6 @@ public class DriverListFragment extends Fragment {
                                                 vehicleAdapter.removeAt(removeIndex);
                                                 Toast.makeText(requireContext(), "Xóa xe thành công.", Toast.LENGTH_SHORT).show();
                                             } else {
-                                                // Nếu không tìm thấy vị trí (vd: do đang filter), rebuild danh sách từ vehicleListFull
                                                 if (vehicleListFull != null) {
                                                     vehicleList.clear();
                                                     vehicleList.addAll(vehicleListFull);
@@ -259,6 +255,8 @@ public class DriverListFragment extends Fragment {
                                                 }
                                                 Toast.makeText(requireContext(), "Xóa thành công (cập nhật danh sách).", Toast.LENGTH_SHORT).show();
                                             }
+                                            // update empty view after deletion
+                                            updateEmptyView();
                                         });
                                     } else {
                                         requireActivity().runOnUiThread(() ->
@@ -279,18 +277,21 @@ public class DriverListFragment extends Fragment {
             }
         });
 
-
         // Mặc định hiển thị danh sách tài xế
         driverRecyclerView.setAdapter(driverAdapter);
         setSelectedSegment(true);
         fabAdd.setVisibility(View.GONE);
+
+        // update empty state initially
+        updateEmptyView();
 
         // set up search watcher
         searchEditText.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 String q = s == null ? "" : s.toString();
-                if (isDriverSelected) filterDrivers(q); else filterVehicles(q);
+                if (isDriverSelected) { filterDrivers(q); } else { filterVehicles(q); }
+                updateEmptyView();
             }
             @Override public void afterTextChanged(Editable s) {}
         });
@@ -301,6 +302,7 @@ public class DriverListFragment extends Fragment {
             fabAdd.setVisibility(View.GONE);
             String q = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
             filterDrivers(q);
+            updateEmptyView();
         });
 
         btnVehicle.setOnClickListener(v -> {
@@ -309,6 +311,7 @@ public class DriverListFragment extends Fragment {
             fabAdd.setVisibility(View.VISIBLE);
             String q = searchEditText.getText() == null ? "" : searchEditText.getText().toString();
             filterVehicles(q);
+            updateEmptyView();
         });
 
         fabAdd.setOnClickListener(v -> {
@@ -367,12 +370,19 @@ public class DriverListFragment extends Fragment {
                     }
 
                     String name = safeGet(cursor, 1);
-                    String ngaySinh = safeGet(cursor, 2);
-                    String addrOrBirth = (ngaySinh != null && !ngaySinh.isEmpty()) ? ngaySinh : "Chưa cập nhật";
+                    String ngaySinh = safeGet(cursor, 2); // dob
+                    String phone = safeGet(cursor, 3);
+                    String cccd = safeGet(cursor, 4);
+                    String gender = safeGet(cursor, 5);
+                    String email = safeGet(cursor, 6);
 
                     DriverListModel model = new DriverListModel(
                             (name != null && !name.isEmpty()) ? name : "Không rõ",
-                            addrOrBirth,
+                            (ngaySinh != null && !ngaySinh.isEmpty()) ? ngaySinh : "Chưa cập nhật",
+                            (gender != null && !gender.isEmpty()) ? gender : "Chưa cập nhật",
+                            (cccd != null && !cccd.isEmpty()) ? cccd : "",
+                            (phone != null && !phone.isEmpty()) ? phone : "",
+                            (email != null && !email.isEmpty()) ? email : "",
                             R.drawable.avatar1
                     );
                     driverList.add(model);
@@ -394,7 +404,6 @@ public class DriverListFragment extends Fragment {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor cursor = null;
         try {
-            // Lấy MaXe để có thể truyền sang VehicleDetailFragment
             cursor = db.rawQuery("SELECT MaXe, BienSo, LoaiXe FROM Xe", null);
             if (cursor != null && cursor.moveToFirst()) {
                 do {
@@ -402,14 +411,12 @@ public class DriverListFragment extends Fragment {
                     try {
                         maXe = cursor.getInt(0);
                     } catch (Exception e) {
-                        // fallback: nếu không parse được, bỏ qua (không hiển thị item đó)
                         Log.w(TAG, "MaXe không hợp lệ tại hàng, bỏ qua item", e);
                         continue;
                     }
                     String plate = safeGet(cursor, 1);
                     String name = safeGet(cursor, 2);
 
-                    // Giả định VehicleListModel có constructor (int maXe, String plate, String name, int imageResId)
                     VehicleListModel v = new VehicleListModel(maXe,
                             (plate != null && !plate.isEmpty()) ? plate : "-",
                             (name != null && !name.isEmpty()) ? name : "Không rõ",
@@ -426,15 +433,15 @@ public class DriverListFragment extends Fragment {
         return list;
     }
 
-    // Fallback: tìm index trong driverList bằng name + location (nếu indexOf() không tìm thấy)
-    private int findIndexByNameAndLocation(String name, String location) {
+    // Fallback: tìm index trong driverList bằng name + dob (nếu indexOf() không tìm thấy)
+    private int findIndexByNameAndDob(String name, String dob) {
         if (name == null) name = "";
-        if (location == null) location = "";
+        if (dob == null) dob = "";
         for (int i = 0; i < driverList.size(); i++) {
             DriverListModel d = driverList.get(i);
             String dn = d.getName() != null ? d.getName() : "";
-            String dl = d.getLocation() != null ? d.getLocation() : "";
-            if (dn.equals(name) && dl.equals(location)) return i;
+            String dd = d.getDob() != null ? d.getDob() : "";
+            if (dn.equals(name) && dd.equals(dob)) return i;
         }
         return -1;
     }
@@ -468,9 +475,23 @@ public class DriverListFragment extends Fragment {
         } else {
             for (int i = 0; i < driverListFull.size(); i++) {
                 DriverListModel d = driverListFull.get(i);
-                String name = d.getName() == null ? "" : d.getName().toLowerCase();
-                String loc = d.getLocation() == null ? "" : d.getLocation().toLowerCase();
-                if (name.contains(q) || loc.contains(q)) {
+
+                // Lấy các trường cần search - tránh null
+                String name   = d.getName()  == null ? "" : d.getName().toLowerCase();
+                String dob    = d.getDob()   == null ? "" : d.getDob().toLowerCase();
+                String phone  = d.getPhone() == null ? "" : d.getPhone().toLowerCase();
+                String cccd   = d.getCccd()  == null ? "" : d.getCccd().toLowerCase();
+                String gender = d.getGender()== null ? "" : d.getGender().toLowerCase();
+                String email  = d.getEmail() == null ? "" : d.getEmail().toLowerCase();
+
+                // Điều kiện search
+                if (name.contains(q)
+                        || dob.contains(q)
+                        || phone.contains(q)
+                        || cccd.contains(q)
+                        || gender.contains(q)
+                        || email.contains(q)) {
+
                     driverList.add(d);
                     driverIds.add(driverIdsFull.get(i));
                 }
@@ -479,6 +500,7 @@ public class DriverListFragment extends Fragment {
 
         if (driverAdapter != null) driverAdapter.notifyDataSetChanged();
     }
+
 
     private void filterVehicles(String query) {
         String q = query == null ? "" : query.trim().toLowerCase();
@@ -497,5 +519,28 @@ public class DriverListFragment extends Fragment {
         }
 
         if (vehicleAdapter != null) vehicleAdapter.notifyDataSetChanged();
+    }
+
+    /**
+     * Update empty view visibility based on current displayed list and segment.
+     */
+    private void updateEmptyView() {
+        if (tvEmpty == null) return;
+
+        boolean empty;
+        if (isDriverSelected) {
+            empty = (driverList == null || driverList.isEmpty());
+        } else {
+            empty = (vehicleList == null || vehicleList.isEmpty());
+        }
+
+        if (empty) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            // optionally hide recycler to show only message:
+            driverRecyclerView.setVisibility(View.GONE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+            driverRecyclerView.setVisibility(View.VISIBLE);
+        }
     }
 }

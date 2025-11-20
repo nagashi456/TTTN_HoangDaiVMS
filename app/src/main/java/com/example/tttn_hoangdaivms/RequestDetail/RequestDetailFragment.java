@@ -33,8 +33,8 @@ public class RequestDetailFragment extends Fragment {
     private RequestModel requestModel;
     private int userId = -1;
 
-    // định dạng thời gian: yyyy-MM-dd HH:mm:ss
-    private static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+    // định dạng thời gian: dd/MM/yyyy HH:mm:ss
+    private static final String DATETIME_FORMAT = "dd/MM/yyyy HH:mm:ss";
 
     @Nullable
     @Override
@@ -82,12 +82,20 @@ public class RequestDetailFragment extends Fragment {
 
         // Nút Duyệt -> cập nhật status = "Đã duyệt"
         if (btnApprove != null) {
-            btnApprove.setOnClickListener(v -> updateRequestStatusPreserveTimestamp(userId, "Đã duyệt"));
+            btnApprove.setOnClickListener(v -> {
+                // disable ngay để tránh bấm nhiều lần
+                setButtonDisabled(btnApprove, true);
+                updateRequestStatusPreserveTimestamp(userId, "Đã duyệt");
+            });
         }
 
         // Nút Hủy -> cập nhật status = "Đã từ chối"
         if (btnCancel != null) {
-            btnCancel.setOnClickListener(v -> updateRequestStatusPreserveTimestamp(userId, "Đã từ chối"));
+            btnCancel.setOnClickListener(v -> {
+                // disable ngay để tránh bấm nhiều lần
+                setButtonDisabled(btnCancel, true);
+                updateRequestStatusPreserveTimestamp(userId, "Đã từ chối");
+            });
         }
 
         // Nút quay lại
@@ -136,6 +144,9 @@ public class RequestDetailFragment extends Fragment {
                     tvStatus.setText(notEmpty(trangThai, "—"));
                     setStatusColor(trangThai);
                 }
+
+                // CẬP NHẬT trạng thái enable/disable nút theo trạng thái trong DB
+                updateButtonsStateFromStatus(trangThai);
 
                 // NOTE: không disable nút nữa — chúng luôn có thể bấm. Chỉ hiển thị thông tin thời điểm xử lý nếu bạn muốn
                 // (bạn có thể thêm TextView hiển thị trangThaiUpdatedAt nếu cần)
@@ -201,7 +212,7 @@ public class RequestDetailFragment extends Fragment {
                     }
                 }
 
-                // Refresh UI từ DB
+                // Refresh UI từ DB (will also set button states)
                 loadUserDetail(userId);
 
                 // Thông báo cho list fragment reload (dù timestamp không đổi)
@@ -210,10 +221,14 @@ public class RequestDetailFragment extends Fragment {
                 getParentFragmentManager().setFragmentResult("request_update", result);
             } else {
                 Toast.makeText(requireContext(), "Cập nhật thất bại!", Toast.LENGTH_SHORT).show();
+                // nếu thất bại (ví dụ row = 0), re-enable nút tương ứng để user thử lại
+                reenableButtonForStatus(newStatus);
             }
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(requireContext(), "Lỗi khi cập nhật DB: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            // có lỗi thì đảm bảo re-enable nút tương ứng để user thử lại
+            reenableButtonForStatus(newStatus);
         } finally {
             if (cursor != null) cursor.close();
             if (db != null) db.close();
@@ -247,6 +262,56 @@ public class RequestDetailFragment extends Fragment {
         } else {
             tvStatus.setTextColor(Color.parseColor("#005DFF")); // màu mặc định cho 'Đang yêu cầu'
         }
+    }
+
+    /**
+     * Disable/enable button và set alpha để nhìn nhạt hơn khi disabled
+     * disabled = true -> nút **không** hoạt động (enabled = false)
+     */
+    private void setButtonDisabled(Button b, boolean disabled) {
+        if (b == null) return;
+        b.setEnabled(!disabled);
+        b.setClickable(!disabled);
+        b.setAlpha(disabled ? 0.5f : 1f);
+    }
+
+    /**
+     * Update button states based on DB status:
+     * - Nếu status == "Đã duyệt" -> disable btnApprove
+     * - Nếu status == "Đã từ chối" -> disable btnCancel
+     * - Ngược lại -> cả hai enable
+     */
+    private void updateButtonsStateFromStatus(String status) {
+        if (btnApprove == null || btnCancel == null) return;
+        if (status == null) {
+            setButtonDisabled(btnApprove, false);
+            setButtonDisabled(btnCancel, false);
+            return;
+        }
+        if (status.equalsIgnoreCase("Đã duyệt")) {
+            setButtonDisabled(btnApprove, true);
+            setButtonDisabled(btnCancel, false);
+        } else if (status.equalsIgnoreCase("Đã từ chối")) {
+            setButtonDisabled(btnCancel, true);
+            setButtonDisabled(btnApprove, false);
+        } else {
+            setButtonDisabled(btnApprove, false);
+            setButtonDisabled(btnCancel, false);
+        }
+    }
+
+    /**
+     * Nếu cập nhật DB thất bại hoặc lỗi thì re-enable nút tương ứng (sử dụng trên UI thread).
+     */
+    private void reenableButtonForStatus(String status) {
+        if (status == null) return;
+        requireActivity().runOnUiThread(() -> {
+            if (status.equalsIgnoreCase("Đã duyệt")) {
+                setButtonDisabled(btnApprove, false);
+            } else if (status.equalsIgnoreCase("Đã từ chối")) {
+                setButtonDisabled(btnCancel, false);
+            }
+        });
     }
 
     private String safeGet(Cursor c, int index) {

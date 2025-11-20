@@ -95,7 +95,7 @@ public class DriverListAdapter extends RecyclerView.Adapter<DriverListAdapter.Dr
     class DriverViewHolder extends RecyclerView.ViewHolder {
         private final ImageView avatar;
         private final TextView nameTv;
-        private final TextView locationTv;
+        private final TextView phoneTv;        // đổi tên từ locationTv -> phoneTv
         private final ImageView editIcon;
         private final ImageView deleteIcon;
 
@@ -103,7 +103,7 @@ public class DriverListAdapter extends RecyclerView.Adapter<DriverListAdapter.Dr
             super(itemView);
             avatar = itemView.findViewById(R.id.driverAvatar);
             nameTv = itemView.findViewById(R.id.driverName);
-            locationTv = itemView.findViewById(R.id.driverLocation);
+            phoneTv = itemView.findViewById(R.id.driverLocation); // id mới: driverPhone
             editIcon = itemView.findViewById(R.id.editIcon);
             deleteIcon = itemView.findViewById(R.id.deleteIcon);
         }
@@ -113,7 +113,11 @@ public class DriverListAdapter extends RecyclerView.Adapter<DriverListAdapter.Dr
             if (driver == null) return;
 
             nameTv.setText(driver.getName());
-            locationTv.setText(driver.getLocation());
+
+            // lấy phone từ model (nếu null hiển thị rỗng)
+            String phone = driver.getPhone() != null ? driver.getPhone() : "";
+            phoneTv.setText(phone);
+
             avatar.setImageResource(driver.getAvatarResId());
 
             // click toàn item -> onDriverClick

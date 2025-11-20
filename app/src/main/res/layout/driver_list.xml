@@ -40,7 +40,7 @@
                 android:layout_marginStart="12dp"
                 android:layout_weight="1"
                 android:background="@null"
-                android:hint="Search"
+                android:hint="Tìm kiếm"
                 android:textColor="#000000"
                 android:textColorHint="#B4BDC4"
                 android:textSize="16sp" />
@@ -85,6 +85,23 @@
             android:textSize="16sp" />
     </LinearLayout>
 
+    <!-- TextView hiển thị khi không có kết quả tìm kiếm -->
+    <TextView
+        android:id="@+id/tvEmpty"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:text="Không có kết quả nào trùng khớp"
+        android:textSize="16sp"
+        android:textColor="#666666"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/segmentedControl"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/driverRecyclerView"
         android:layout_width="0dp"
@@ -96,7 +113,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/segmentedControl"
+        app:layout_constraintTop_toBottomOf="@id/tvEmpty"
         app:layout_constraintVertical_bias="1.0" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -110,6 +127,5 @@
         android:layout_margin="24dp"
         android:visibility="gone"
         android:src="@android:drawable/ic_input_add" />
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>

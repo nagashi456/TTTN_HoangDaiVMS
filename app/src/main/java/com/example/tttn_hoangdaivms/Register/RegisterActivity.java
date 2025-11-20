@@ -231,7 +231,7 @@ public class RegisterActivity extends AppCompatActivity {
 
         boolean success = dbHelper.insertNguoiDung(email, pass, name, birthday, gender, cccd, phone, vaiTro, trangThai);
         if (success) {
-            Toast.makeText(this, "Đăng ký thành cô  ng, vui lòng chờ duyệt!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Yêu cầu đăng ký đã được gửi đến quản lý.", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(this, LoginActivity.class));
             finish();
             tabLogin.setBackgroundResource(R.drawable.bg_tab_active);
