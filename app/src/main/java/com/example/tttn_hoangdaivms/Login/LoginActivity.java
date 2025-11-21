@@ -5,13 +5,16 @@ import androidx.appcompat.app.AppCompatDelegate;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.text.method.PasswordTransformationMethod;
 import android.view.MotionEvent;
 import android.view.View;
@@ -68,6 +71,22 @@ public class LoginActivity extends AppCompatActivity {
         btnLogin = findViewById(R.id.btnLogin);
         tabLogin = findViewById(R.id.tabLogin);
         tabRegister = findViewById(R.id.tabRegister);
+
+        // Clear lỗi khi user gõ lại
+        TextWatcher clearErrorsWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override
+            public void afterTextChanged(Editable s) {
+                // xóa lỗi/viền đỏ khi user thay đổi text
+                edtEmail.setError(null);
+                edtEmail.setBackgroundTintList(null);
+                edtPassword.setError(null);
+                edtPassword.setBackgroundTintList(null);
+            }
+        };
+        edtEmail.addTextChangedListener(clearErrorsWatcher);
+        edtPassword.addTextChangedListener(clearErrorsWatcher);
 
         // --- NEW: xử lý nhấn vào icon cuối EditText để toggle show/hide password ---
         // lưu ý: layout của bạn đã có android:drawableEnd="@drawable/ic_eye_off"
@@ -149,6 +168,17 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
+        // --- MỚI: kiểm tra tài khoản có tồn tại hay không trước ---
+        User user = dbHelper.getUserByEmail(email);
+        if (user == null) {
+            // Nếu không tồn tại, thông báo chung (không tiết lộ rõ là email hay password sai)
+            Toast.makeText(this, "Tên đăng nhập hoặc mật khẩu không hợp lệ", Toast.LENGTH_LONG).show();
+            // highlight email field đỏ
+            edtEmail.setBackgroundResource(R.drawable.bg_edittext_error);
+            edtPassword.setBackgroundResource(R.drawable.bg_edittext_white);
+            return;
+        }
+
         // Trước hết: kiểm tra trạng thái tài khoản (nếu có) - nếu đã khóa thì không tăng counter, chỉ thông báo
         String currentStatus = dbHelper.getUserStatus(email);
         if (currentStatus != null) {
@@ -162,6 +192,11 @@ public class LoginActivity extends AppCompatActivity {
         // 1) Kiểm tra credentials (email + password)
         boolean credentialsOk = dbHelper.validateCredentials(email, password);
         if (!credentialsOk) {
+            // Nếu tài khoản tồn tại (đã kiểm tra ở trên) nhưng mật khẩu sai -> highlight password
+            edtEmail.setBackgroundResource(R.drawable.bg_edittext_white);
+            edtPassword.setBackgroundResource(R.drawable.bg_edittext_error);
+            edtPassword.requestFocus();
+
             // tăng counter và kiểm tra khóa (chỉ tăng nếu tài khoản hiện chưa bị khóa)
             int attempts = incrementFailedAttempts(email);
 
@@ -175,7 +210,7 @@ public class LoginActivity extends AppCompatActivity {
                 }
             } else {
                 int remaining = MAX_FAILED_ATTEMPTS - attempts;
-                Toast.makeText(this, "Sai thông tin đăng nhập! Còn " + remaining + " lần thử trước khi khóa.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Tên đăng nhập hoặc mật khẩu không hợp lệ", Toast.LENGTH_LONG).show();
             }
             return;
         }
@@ -184,7 +219,7 @@ public class LoginActivity extends AppCompatActivity {
         String status = dbHelper.getUserStatus(email);
         if (status == null) {
             // Không tìm thấy hồ sơ người dùng (cấu trúc DB không nhất quán)
-            Toast.makeText(this, "Tài khoản chưa có hồ sơ, liên hệ quản trị.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Tên đăng nhập hoặc mật khẩu không hợp lệ", Toast.LENGTH_LONG).show();
             return;
         }
 
@@ -261,6 +296,12 @@ public class LoginActivity extends AppCompatActivity {
         // Nếu đến đây => cho phép đăng nhập
         // reset attempt counter vì login thành công
         resetFailedAttempts(email);
+
+        // Clear any previous error visuals
+        edtEmail.setError(null);
+        edtEmail.setBackgroundTintList(null);
+        edtPassword.setError(null);
+        edtPassword.setBackgroundTintList(null);
 
         User currentUser = dbHelper.getUserByEmail(email);
         if (currentUser == null) {
