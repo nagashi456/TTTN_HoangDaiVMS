@@ -29,6 +29,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class DriverListFragment extends Fragment {
     private static final String TAG = "DriverListFragment";
@@ -463,6 +464,12 @@ public class DriverListFragment extends Fragment {
         }
     }
 
+    // normalize plate: remove non-alphanumeric chars and lowercase
+    private String normalizePlate(String plate) {
+        if (plate == null) return "";
+        return plate.replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.getDefault());
+    }
+
     // ====== FILTER FUNCTIONS ======
     private void filterDrivers(String query) {
         String q = query == null ? "" : query.trim().toLowerCase();
@@ -503,22 +510,51 @@ public class DriverListFragment extends Fragment {
 
 
     private void filterVehicles(String query) {
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String qRaw = query == null ? "" : query.trim();
+        String qNorm = normalizePlate(qRaw); // for plate matching
+        String qLower = qRaw.toLowerCase(Locale.getDefault()); // for name/type matching
+
         vehicleList.clear();
 
-        if (q.isEmpty()) {
+        if (vehicleListFull == null) vehicleListFull = new ArrayList<>();
+
+        if (qRaw.isEmpty()) {
             vehicleList.addAll(vehicleListFull);
         } else {
             for (VehicleListModel v : vehicleListFull) {
-                String plate = v.getPlateNumber() == null ? "" : v.getPlateNumber().toLowerCase();
-                String name = v.getName() == null ? "" : v.getName().toLowerCase();
-                if (plate.contains(q) || name.contains(q)) {
+                String plate = v.getPlateNumber() == null ? "" : v.getPlateNumber();
+                String name = v.getName() == null ? "" : v.getName();
+
+                String plateNorm = normalizePlate(plate);
+                String nameLower = name.toLowerCase(Locale.getDefault());
+
+                boolean matchPlate = !qNorm.isEmpty() && plateNorm.contains(qNorm);
+                boolean matchName = !qLower.isEmpty() && nameLower.contains(qLower);
+
+                if (matchPlate || matchName) {
                     vehicleList.add(v);
                 }
             }
         }
 
-        if (vehicleAdapter != null) vehicleAdapter.notifyDataSetChanged();
+        // Use adapter's updateList if exists (you used updateList elsewhere), otherwise notify
+        try {
+            if (vehicleAdapter != null) {
+                vehicleAdapter.updateList(vehicleList);
+            } else {
+                // fallback
+                Log.w(TAG, "vehicleAdapter is null in filterVehicles");
+            }
+        } catch (NoSuchMethodError | Exception e) {
+            // fallback to notifyDataSetChanged if adapter doesn't implement updateList
+            if (vehicleAdapter != null) {
+                try {
+                    vehicleAdapter.notifyDataSetChanged();
+                } catch (Exception ex) {
+                    Log.w(TAG, "Could not call notifyDataSetChanged on vehicleAdapter", ex);
+                }
+            }
+        }
     }
 
     /**
