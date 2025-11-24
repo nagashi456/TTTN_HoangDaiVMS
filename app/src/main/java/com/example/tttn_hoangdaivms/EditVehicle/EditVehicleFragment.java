@@ -4,15 +4,19 @@ import android.app.DatePickerDialog;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.ArrayAdapter;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -24,13 +28,16 @@ import com.example.tttn_hoangdaivms.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class EditVehicleFragment extends Fragment {
 
@@ -53,6 +60,10 @@ public class EditVehicleFragment extends Fragment {
 
     // date format
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+
+    // plate validation
+    private static final Pattern PLATE_ALLOWED = Pattern.compile("^[A-Za-z0-9\\s-]+$");
+    private static final int PLATE_MAX_LENGTH = 50;
 
     public EditVehicleFragment() { /* required empty ctor */ }
 
@@ -126,7 +137,17 @@ public class EditVehicleFragment extends Fragment {
         }
 
         // save click
-        btnSave.setOnClickListener(v -> saveVehicle());
+        btnSave.setOnClickListener(v -> {
+            // clear previous inline errors
+            removeFieldErrorAbove(edtBienSo);
+            removeFieldErrorAbove(edtNgayBatDau);
+            removeFieldErrorAbove(edtNgayKetThuc);
+            removeFieldErrorAbove(edtNgayGanNhat);
+            removeFieldErrorAbove(actvAssignDriver);
+
+            if (!validateInputs()) return;
+            saveVehicle();
+        });
     }
 
     private void prefillEmptyPlaceholders() {
@@ -150,6 +171,13 @@ public class EditVehicleFragment extends Fragment {
     private void showDatePicker(final EditText target) {
         if (target == null) return;
         final Calendar c = Calendar.getInstance();
+        Date cur = null;
+        try {
+            String t = target.getText() == null ? "" : target.getText().toString().trim();
+            cur = parseDateSafe(t);
+        } catch (Exception ignored) {}
+        if (cur != null) c.setTime(cur);
+
         DatePickerDialog dpd = new DatePickerDialog(requireContext(),
                 (view, year, month, dayOfMonth) -> {
                     Calendar picked = Calendar.getInstance();
@@ -168,12 +196,14 @@ public class EditVehicleFragment extends Fragment {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor c = null;
         try {
-            // Lọc VaiTro chứa 'tài' hoặc 'nhân viên' (case-insensitive) — phù hợp với dữ liệu thật
+            // Lọc VaiTro chứa 'tài' hoặc 'nhân viên' (case-insensitive)
             c = db.rawQuery(
                     "SELECT MaNguoiDung, HoTen FROM NguoiDung WHERE lower(COALESCE(VaiTro,'')) LIKE ? OR lower(COALESCE(VaiTro,'')) LIKE ? ORDER BY HoTen COLLATE NOCASE",
                     new String[]{"%tài%", "%nhân viên%"}
             );
 
+            List<String> tmpNames = new ArrayList<>();
+            List<String> tmpIds = new ArrayList<>();
             if (c != null && c.moveToFirst()) {
                 do {
                     int id = -1;
@@ -181,11 +211,24 @@ public class EditVehicleFragment extends Fragment {
                     String name = "";
                     try { name = c.getString(1); } catch (Exception ignored) {}
                     if (TextUtils.isEmpty(name)) name = "Không rõ (" + id + ")";
-                    driverNames.add(name);
-                    driverIds.add(String.valueOf(id));
-                    driverNameToId.put(name, id);
+                    tmpNames.add(name);
+                    tmpIds.add(String.valueOf(id));
                 } while (c.moveToNext());
             }
+
+            // add explicit "Không gán" at top with id = 0
+            driverNames.add("Không gán");
+            driverIds.add("0");
+            driverNameToId.put("Không gán", 0);
+
+            for (int i = 0; i < tmpNames.size(); i++) {
+                String name = tmpNames.get(i);
+                String id = tmpIds.get(i);
+                driverNames.add(name);
+                driverIds.add(id);
+                try { driverNameToId.put(name, Integer.parseInt(id)); } catch (Exception ignored) {}
+            }
+
         } catch (Exception ex) {
             ex.printStackTrace();
         } finally {
@@ -220,6 +263,8 @@ public class EditVehicleFragment extends Fragment {
             if (cXe != null && cXe.moveToFirst()) {
                 int maNguoiDung = -1;
                 try { maNguoiDung = cXe.getInt(cXe.getColumnIndexOrThrow("MaNguoiDung")); } catch (Exception ignored) {}
+                if (cXe.getColumnIndex("MaNguoiDung") != -1 && cXe.isNull(cXe.getColumnIndex("MaNguoiDung"))) maNguoiDung = -1;
+
                 String bienSo = safeGet(cXe, "BienSo");
                 String loaiXe = safeGet(cXe, "LoaiXe");
                 String hangSX = safeGet(cXe, "HangSX");
@@ -258,6 +303,10 @@ public class EditVehicleFragment extends Fragment {
                             if (cName != null) cName.close();
                         }
                     }
+                } else {
+                    // if null/0 -> set "Không gán" if exists
+                    int idx0 = driverNames.indexOf("Không gán");
+                    if (idx0 >= 0 && actvAssignDriver != null) actvAssignDriver.setText("Không gán", false);
                 }
 
                 // BaoTri: latest by MaXe
@@ -273,7 +322,7 @@ public class EditVehicleFragment extends Fragment {
                     if (edtDonViThucHien != null) edtDonViThucHien.setText(!TextUtils.isEmpty(donVi) ? donVi : "");
                 }
 
-                // BaoHiem: latest by MaXe (NOTE: new schema uses MaXe in BaoHiem)
+                // BaoHiem: latest by MaXe
                 cBaoHiem = db.rawQuery("SELECT MaBaoHiem, SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
                         new String[]{String.valueOf(maXe)});
                 if (cBaoHiem != null && cBaoHiem.moveToFirst()) {
@@ -346,12 +395,6 @@ public class EditVehicleFragment extends Fragment {
         String ngayGanNhat = edtNgayGanNhat.getText() == null ? "" : edtNgayGanNhat.getText().toString().trim();
         String donVi = edtDonViThucHien.getText() == null ? "" : edtDonViThucHien.getText().toString().trim();
 
-        // Basic validation: biển số không rỗng
-        if (TextUtils.isEmpty(bienSo)) {
-            Toast.makeText(requireContext(), "Vui lòng nhập biển số.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
         SQLiteDatabase db = null;
         try {
             db = dbHelper.getWritableDatabase();
@@ -362,7 +405,7 @@ public class EditVehicleFragment extends Fragment {
             if (maXe == -1) {
                 // Insert new Xe
                 ContentValues vXe = new ContentValues();
-                if (maTaiXe != -1) vXe.put("MaNguoiDung", maTaiXe);
+                if (maTaiXe > 0) vXe.put("MaNguoiDung", maTaiXe);
                 else vXe.putNull("MaNguoiDung");
                 vXe.put("BienSo", bienSo);
                 vXe.put("LoaiXe", loaiXe);
@@ -376,7 +419,7 @@ public class EditVehicleFragment extends Fragment {
             } else {
                 // Update existing Xe
                 ContentValues vXe = new ContentValues();
-                if (maTaiXe != -1) vXe.put("MaNguoiDung", maTaiXe);
+                if (maTaiXe > 0) vXe.put("MaNguoiDung", maTaiXe);
                 else vXe.putNull("MaNguoiDung");
                 vXe.put("BienSo", bienSo);
                 vXe.put("LoaiXe", loaiXe);
@@ -479,5 +522,151 @@ public class EditVehicleFragment extends Fragment {
                 try { db.endTransaction(); } catch (Exception ignored) {}
             }
         }
+    }
+
+    // ---------------- inline-error helpers (show TextView above EditText / View) ----------------
+
+    private void setFieldErrorAbove(final EditText editText, final String message) {
+        if (editText == null) return;
+        requireActivity().runOnUiThread(() -> {
+            ViewParent p = editText.getParent();
+            if (!(p instanceof ViewGroup)) return;
+            ViewGroup row = (ViewGroup) p;
+
+            ViewParent gp = row.getParent();
+            ViewGroup container = (gp instanceof ViewGroup) ? (ViewGroup) gp : row;
+
+            String tag = "error_above_" + editText.getId();
+            View existing = container.findViewWithTag(tag);
+            if (existing instanceof TextView) {
+                ((TextView) existing).setText(message);
+                existing.setVisibility(View.VISIBLE);
+                return;
+            }
+
+            TextView tv = new TextView(requireContext());
+            tv.setTag(tag);
+            tv.setText(message);
+            tv.setTextColor(Color.parseColor("#D32F2F"));
+            tv.setTextSize(12);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            lp.setMargins(0, 6, 0, 6);
+
+            int insertIdx = -1;
+            if (container != null) {
+                try {
+                    insertIdx = container.indexOfChild(row);
+                } catch (Exception ignored) { insertIdx = -1; }
+            }
+            if (insertIdx >= 0) container.addView(tv, insertIdx, lp);
+            else {
+                int idx = row.indexOfChild(editText);
+                if (idx >= 0) row.addView(tv, idx, lp);
+                else row.addView(tv, lp);
+            }
+        });
+    }
+
+    private void removeFieldErrorAbove(final EditText editText) {
+        if (editText == null) return;
+        requireActivity().runOnUiThread(() -> {
+            ViewParent p = editText.getParent();
+            if (!(p instanceof ViewGroup)) return;
+            ViewGroup row = (ViewGroup) p;
+            ViewParent gp = row.getParent();
+            ViewGroup container = (gp instanceof ViewGroup) ? (ViewGroup) gp : row;
+
+            String tag = "error_above_" + editText.getId();
+            View existing = container.findViewWithTag(tag);
+            if (existing != null) container.removeView(existing);
+        });
+    }
+
+    /**
+     * Validate inputs and show inline errors above fields.
+     * Returns true if all valid.
+     */
+    private boolean validateInputs() {
+        boolean ok = true;
+
+        // Plate required
+        String plate = edtBienSo == null ? "" : edtBienSo.getText().toString().trim();
+        if (TextUtils.isEmpty(plate)) {
+            setFieldErrorAbove(edtBienSo, "Vui lòng điền biển số xe");
+            ok = false;
+        } else {
+            if (plate.length() > PLATE_MAX_LENGTH || !PLATE_ALLOWED.matcher(plate).matches()) {
+                setFieldErrorAbove(edtBienSo, "Định dạng biển số không hợp lệ");
+                ok = false;
+            }
+        }
+
+        // Driver selection: allow "Không gán" or empty (if you want empty to fallback to current user)
+        String selDriver = actvAssignDriver == null ? "" : actvAssignDriver.getText().toString().trim();
+        if (!TextUtils.isEmpty(selDriver)) {
+            if (!driverNameToId.containsKey(selDriver)) {
+                setFieldErrorAbove(actvAssignDriver, "Vui lòng chọn một tài xế trong danh sách hoặc 'Không gán'");
+                ok = false;
+            }
+        }
+
+        // Date comparisons
+        String sStart = edtNgayBatDau == null ? "" : edtNgayBatDau.getText().toString().trim();
+        String sEnd = edtNgayKetThuc == null ? "" : edtNgayKetThuc.getText().toString().trim();
+        Date start = parseDateSafe(sStart);
+        Date end = parseDateSafe(sEnd);
+        if (!TextUtils.isEmpty(sStart) && !TextUtils.isEmpty(sEnd)) {
+            if (start == null) { setFieldErrorAbove(edtNgayBatDau, "Ngày bắt đầu không hợp lệ"); ok = false; }
+            if (end == null) { setFieldErrorAbove(edtNgayKetThuc, "Ngày kết thúc không hợp lệ"); ok = false; }
+            if (start != null && end != null) {
+                if (removeTime(start).after(removeTime(end))) {
+                    setFieldErrorAbove(edtNgayBatDau, "Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc");
+                    setFieldErrorAbove(edtNgayKetThuc, "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu");
+                    ok = false;
+                }
+            }
+        }
+
+        // Recent date must not be in future
+        String sRecent = edtNgayGanNhat == null ? "" : edtNgayGanNhat.getText().toString().trim();
+        if (!TextUtils.isEmpty(sRecent)) {
+            Date recent = parseDateSafe(sRecent);
+            if (recent == null) { setFieldErrorAbove(edtNgayGanNhat, "Ngày gần nhất không hợp lệ"); ok = false; }
+            else if (removeTime(recent).after(removeTime(new Date()))) {
+                setFieldErrorAbove(edtNgayGanNhat, "Ngày gần nhất không được là ngày tương lai");
+                ok = false;
+            }
+        }
+
+        return ok;
+    }
+
+    private Date parseDateSafe(String s) {
+        if (TextUtils.isEmpty(s)) return null;
+        try {
+            SimpleDateFormat sdf1 = new SimpleDateFormat("d/M/yyyy", Locale.getDefault());
+            sdf1.setLenient(false);
+            return sdf1.parse(s);
+        } catch (ParseException ignored) {}
+        try {
+            SimpleDateFormat sdf2 = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            sdf2.setLenient(false);
+            return sdf2.parse(s);
+        } catch (ParseException ignored) {}
+        return null;
+    }
+
+    private Date removeTime(Date d) {
+        Calendar c = Calendar.getInstance();
+        c.setTime(d);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTime();
     }
 }

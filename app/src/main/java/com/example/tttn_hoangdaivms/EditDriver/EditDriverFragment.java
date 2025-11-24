@@ -18,9 +18,9 @@ import android.widget.Toast;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.view.ViewGroup.LayoutParams;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.app.AlertDialog;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -51,6 +51,9 @@ public class EditDriverFragment extends Fragment {
     private String idNguoiDungStr = null;
     private int maNguoiDung = -1;
     private int maTaiKhoan = -1;
+
+    // store original password loaded from TK table to avoid overwriting with empty
+    private String originalMatKhau = null;
 
     // Validation patterns
     private static final Pattern NAME_PATTERN = Pattern.compile("^[\\p{L} ]{2,}$"); // letters + spaces
@@ -113,17 +116,17 @@ public class EditDriverFragment extends Fragment {
             idNguoiDungStr = args.getString(ARG_ID);
         }
 
-        // email & work status are read-only
+        // email & work status are read-only in UI
         if (etEmail != null) {
             etEmail.setEnabled(false);
             etEmail.setFocusable(false);
             etEmail.setClickable(false);
         }
-        if (etWorkStatus != null) {
-            etWorkStatus.setEnabled(false);
-            etWorkStatus.setFocusable(false);
-            etWorkStatus.setClickable(false);
-        }
+//        if (etWorkStatus != null) {
+//            etWorkStatus.setEnabled(false);
+//            etWorkStatus.setFocusable(false);
+//            etWorkStatus.setClickable(false);
+//        }
 
         // height & weight only numbers
         if (etHeight != null) etHeight.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
@@ -162,14 +165,13 @@ public class EditDriverFragment extends Fragment {
             else requireActivity().finish();
         });
 
-        // NEW: always show confirmation dialog first; then validate all fields and if ok -> save
+        // Confirmation then validate then save
         btnSave.setOnClickListener(v -> {
             new AlertDialog.Builder(requireContext())
                     .setTitle("Xác nhận")
                     .setMessage("Bạn có chắc chắn muốn lưu không?")
                     .setNegativeButton("Không", (dialog, which) -> dialog.dismiss())
                     .setPositiveButton("Có", (dialog, which) -> {
-                        // When user confirms, validate all fields and show errors above each invalid field.
                         boolean allOk = validateAllInputsAndShowErrors();
                         if (allOk) {
                             doSave();
@@ -192,7 +194,6 @@ public class EditDriverFragment extends Fragment {
 
     private void showDatePickerFor(EditText et) {
         final Calendar calendar = Calendar.getInstance();
-        // Try parse current text
         Date cur = parseDateStrict(safeText(et));
         if (cur != null) calendar.setTime(cur);
 
@@ -209,14 +210,22 @@ public class EditDriverFragment extends Fragment {
         dpd.show();
     }
 
-    // perform actual DB save (in background). Called after user confirmed and validation passed
+    /**
+     * Lưu dữ liệu:
+     * - Không ghi MatKhau vào bảng NguoiDung.
+     * - Nếu maTaiKhoan tồn tại -> update TaiKhoan.
+     * - Nếu maTaiKhoan chưa có và user nhập mật khẩu/email -> insert TaiKhoan trước, lấy id -> gán vào NguoiDung.
+     * Tất cả thực hiện trong transaction.
+     */
     private void doSave() {
-        // collect values (email and work status not updated)
         final String name = safeText(etName);
         final String cccd = safeText(etCCCD);
         final String phone = safeText(etPhone);
         final String birthday = safeText(etBirthday);
         final String gender = safeText(etGender);
+        // matkhau và email thuộc TaiKhoan
+        final String matkhau = safeText(etWorkStatus); // thường read-only
+        final String email = safeText(etEmail);
         final String height = safeText(etHeight);
         final String weight = safeText(etWeight);
         final String disease = safeText(etDisease);
@@ -232,86 +241,142 @@ public class EditDriverFragment extends Fragment {
             SQLiteDatabase db = null;
             try {
                 db = dbHelper.getWritableDatabase();
-                if (maNguoiDung == -1 && !TextUtils.isEmpty(idNguoiDungStr)) {
-                    try (Cursor c = db.rawQuery("SELECT MaNguoiDung, MaTaiKhoan FROM NguoiDung WHERE MaNguoiDung = ?",
-                            new String[]{idNguoiDungStr})) {
-                        if (c != null && c.moveToFirst()) {
-                            maNguoiDung = c.getInt(0);
-                            if (c.getColumnCount() >= 2) {
+                db.beginTransaction();
+                try {
+                    // ensure maNguoiDung if id provided
+                    if (maNguoiDung == -1 && !TextUtils.isEmpty(idNguoiDungStr)) {
+                        try (Cursor c = db.rawQuery("SELECT MaNguoiDung, MaTaiKhoan FROM NguoiDung WHERE MaNguoiDung = ?",
+                                new String[]{idNguoiDungStr})) {
+                            if (c != null && c.moveToFirst()) {
+                                maNguoiDung = c.getInt(0);
                                 try { maTaiKhoan = c.getInt(1); } catch (Exception ignored) {}
                             }
                         }
                     }
-                }
 
-                if (maNguoiDung != -1) {
-                    ContentValues cv = new ContentValues();
-                    cv.put("HoTen", name);
-                    cv.put("CCCD", cccd);
-                    cv.put("SDT", phone);
-                    // Do not update TrangThai or Email here
-                    if (!TextUtils.isEmpty(birthday)) cv.put("NgaySinh", birthday);
-                    if (!TextUtils.isEmpty(gender)) cv.put("GioiTinh", gender);
-                    db.update("NguoiDung", cv, "MaNguoiDung = ?", new String[]{String.valueOf(maNguoiDung)});
-                } else {
-                    ContentValues cv = new ContentValues();
-                    cv.put("HoTen", name);
-                    cv.put("CCCD", cccd);
-                    cv.put("SDT", phone);
-                    if (!TextUtils.isEmpty(birthday)) cv.put("NgaySinh", birthday);
-                    if (!TextUtils.isEmpty(gender)) cv.put("GioiTinh", gender);
-                    long newId = db.insert("NguoiDung", null, cv);
-                    if (newId != -1) maNguoiDung = (int) newId;
-                }
+                    // --- Handle TaiKhoan (create/update) ---
+                    // If maTaiKhoan exists, update it with matkhau/email if provided
+                    if (maTaiKhoan != -1) {
+                        ContentValues cvTK = new ContentValues();
+                        boolean tkNeedsUpdate = false;
+                        if (!TextUtils.isEmpty(matkhau)) { cvTK.put("MatKhau", matkhau); tkNeedsUpdate = true; }
+                        if (!TextUtils.isEmpty(email)) { cvTK.put("Email", email); tkNeedsUpdate = true; }
+                        if (tkNeedsUpdate) {
+                            int rows = db.update("TaiKhoan", cvTK, "MaTaiKhoan = ?", new String[]{String.valueOf(maTaiKhoan)});
+                            if (rows <= 0) Log.w("EditDriver", "Update TaiKhoan returned 0 rows for id=" + maTaiKhoan);
+                        }
+                    } else {
+                        // no maTaiKhoan yet: if user provided password/email (or we have originalMatKhau), create TaiKhoan
+                        String pwToUse = null;
+                        if (!TextUtils.isEmpty(matkhau)) pwToUse = matkhau;
+                        else if (!TextUtils.isEmpty(originalMatKhau)) pwToUse = originalMatKhau;
 
-                // SucKhoe
-                if (maNguoiDung != -1) {
-                    boolean hasSucKhoe = false;
-                    int sucKhoeId = -1;
-                    try (Cursor c = db.rawQuery("SELECT MaSucKhoe FROM SucKhoe WHERE MaNguoiDung = ? ORDER BY NgayKham DESC LIMIT 1",
-                            new String[]{String.valueOf(maNguoiDung)})) {
-                        if (c != null && c.moveToFirst()) {
-                            hasSucKhoe = true;
-                            sucKhoeId = c.getInt(0);
+                        if (!TextUtils.isEmpty(pwToUse) || !TextUtils.isEmpty(email)) {
+                            ContentValues cvTK = new ContentValues();
+                            if (!TextUtils.isEmpty(pwToUse)) cvTK.put("MatKhau", pwToUse);
+                            if (!TextUtils.isEmpty(email)) cvTK.put("Email", email);
+                            long tkId = db.insert("TaiKhoan", null, cvTK);
+                            if (tkId == -1) {
+                                throw new RuntimeException("Insert TaiKhoan failed (insert returned -1). Kiểm tra ràng buộc trên bảng TaiKhoan.");
+                            }
+                            maTaiKhoan = (int) tkId;
                         }
                     }
-                    ContentValues cvSK = new ContentValues();
-                    if (!TextUtils.isEmpty(height)) cvSK.put("ChieuCao", height);
-                    if (!TextUtils.isEmpty(weight)) cvSK.put("CanNang", weight);
-                    if (!TextUtils.isEmpty(disease)) cvSK.put("BenhNen", disease);
-                    if (!TextUtils.isEmpty(lastCheckup)) cvSK.put("NgayKham", lastCheckup);
-                    if (!TextUtils.isEmpty(conclusion)) cvSK.put("KetLuan", conclusion);
-                    if (!TextUtils.isEmpty(drugTest)) {
-                        String dt = drugTest.trim().toLowerCase();
-                        if (dt.contains("âm") || dt.contains("am")) cvSK.put("MaTuy", 0);
-                        else if (dt.contains("dương") || dt.contains("duong")) cvSK.put("MaTuy", 1);
+
+                    // --- Insert or update NguoiDung (without MatKhau) ---
+                    if (maNguoiDung != -1) {
+                        ContentValues cv = new ContentValues();
+                        cv.put("HoTen", name);
+                        cv.put("CCCD", cccd);
+                        cv.put("SDT", phone);
+                        if (!TextUtils.isEmpty(birthday)) cv.put("NgaySinh", birthday);
+                        if (!TextUtils.isEmpty(gender)) cv.put("GioiTinh", gender);
+                        // ensure MaTaiKhoan set if available
+                        if (maTaiKhoan != -1) cv.put("MaTaiKhoan", maTaiKhoan);
+
+                        int rows = db.update("NguoiDung", cv, "MaNguoiDung = ?", new String[]{String.valueOf(maNguoiDung)});
+                        if (rows <= 0) {
+                            Log.w("EditDriver", "Update NguoiDung returned 0 rows for id=" + maNguoiDung);
+                        }
+                    } else {
+                        ContentValues cv = new ContentValues();
+                        cv.put("HoTen", name);
+                        cv.put("CCCD", cccd);
+                        cv.put("SDT", phone);
+                        if (!TextUtils.isEmpty(birthday)) cv.put("NgaySinh", birthday);
+                        if (!TextUtils.isEmpty(gender)) cv.put("GioiTinh", gender);
+                        if (maTaiKhoan != -1) cv.put("MaTaiKhoan", maTaiKhoan);
+
+                        long newId = db.insert("NguoiDung", null, cv);
+                        if (newId == -1) {
+                            throw new RuntimeException("Insert NguoiDung failed (insert returned -1). Kiểm tra ràng buộc trên bảng NguoiDung.");
+                        }
+                        maNguoiDung = (int) newId;
                     }
-                    cvSK.put("MaNguoiDung", maNguoiDung);
 
-                    if (hasSucKhoe && sucKhoeId != -1) db.update("SucKhoe", cvSK, "MaSucKhoe = ?", new String[]{String.valueOf(sucKhoeId)});
-                    else db.insert("SucKhoe", null, cvSK);
-                }
+                    // --- SucKhoe (unchanged logic) ---
+                    if (maNguoiDung != -1) {
+                        boolean hasSucKhoe = false;
+                        int sucKhoeId = -1;
+                        try (Cursor c = db.rawQuery("SELECT MaSucKhoe FROM SucKhoe WHERE MaNguoiDung = ? ORDER BY NgayKham DESC LIMIT 1",
+                                new String[]{String.valueOf(maNguoiDung)})) {
+                            if (c != null && c.moveToFirst()) {
+                                hasSucKhoe = true;
+                                sucKhoeId = c.getInt(0);
+                            }
+                        }
+                        ContentValues cvSK = new ContentValues();
+                        if (!TextUtils.isEmpty(height)) cvSK.put("ChieuCao", height);
+                        if (!TextUtils.isEmpty(weight)) cvSK.put("CanNang", weight);
+                        if (!TextUtils.isEmpty(disease)) cvSK.put("BenhNen", disease);
+                        if (!TextUtils.isEmpty(lastCheckup)) cvSK.put("NgayKham", lastCheckup);
+                        if (!TextUtils.isEmpty(conclusion)) cvSK.put("KetLuan", conclusion);
+                        if (!TextUtils.isEmpty(drugTest)) {
+                            String dt = drugTest.trim().toLowerCase();
+                            if (dt.contains("âm") || dt.contains("am")) cvSK.put("MaTuy", 0);
+                            else if (dt.contains("dương") || dt.contains("duong")) cvSK.put("MaTuy", 1);
+                        }
+                        cvSK.put("MaNguoiDung", maNguoiDung);
 
-                // BangCap
-                if (maNguoiDung != -1) {
-                    boolean hasBangCap = false;
-                    int bangCapId = -1;
-                    try (Cursor c = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaNguoiDung = ? ORDER BY MaBangCap DESC LIMIT 1",
-                            new String[]{String.valueOf(maNguoiDung)})) {
-                        if (c != null && c.moveToFirst()) {
-                            hasBangCap = true;
-                            bangCapId = c.getInt(0);
+                        if (hasSucKhoe && sucKhoeId != -1) {
+                            int rows = db.update("SucKhoe", cvSK, "MaSucKhoe = ?", new String[]{String.valueOf(sucKhoeId)});
+                            if (rows <= 0) Log.w("EditDriver", "Update SucKhoe returned 0 rows id=" + sucKhoeId);
+                        } else {
+                            long id = db.insert("SucKhoe", null, cvSK);
+                            if (id == -1) Log.w("EditDriver", "Insert SucKhoe returned -1");
                         }
                     }
-                    ContentValues cvBC = new ContentValues();
-                    if (!TextUtils.isEmpty(licenseType)) cvBC.put("Loai", licenseType);
-                    if (!TextUtils.isEmpty(dateIssued)) cvBC.put("NgayCap", dateIssued);
-                    if (!TextUtils.isEmpty(dateExpired)) cvBC.put("NgayHetHan", dateExpired);
-                    if (!TextUtils.isEmpty(address)) cvBC.put("NoiCap", address);
-                    cvBC.put("MaNguoiDung", maNguoiDung);
 
-                    if (hasBangCap && bangCapId != -1) db.update("BangCap", cvBC, "MaBangCap = ?", new String[]{String.valueOf(bangCapId)});
-                    else db.insert("BangCap", null, cvBC);
+                    // --- BangCap (unchanged logic) ---
+                    if (maNguoiDung != -1) {
+                        boolean hasBangCap = false;
+                        int bangCapId = -1;
+                        try (Cursor c = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaNguoiDung = ? ORDER BY MaBangCap DESC LIMIT 1",
+                                new String[]{String.valueOf(maNguoiDung)})) {
+                            if (c != null && c.moveToFirst()) {
+                                hasBangCap = true;
+                                bangCapId = c.getInt(0);
+                            }
+                        }
+                        ContentValues cvBC = new ContentValues();
+                        if (!TextUtils.isEmpty(licenseType)) cvBC.put("Loai", licenseType);
+                        if (!TextUtils.isEmpty(dateIssued)) cvBC.put("NgayCap", dateIssued);
+                        if (!TextUtils.isEmpty(dateExpired)) cvBC.put("NgayHetHan", dateExpired);
+                        if (!TextUtils.isEmpty(address)) cvBC.put("NoiCap", address);
+                        cvBC.put("MaNguoiDung", maNguoiDung);
+
+                        if (hasBangCap && bangCapId != -1) {
+                            int rows = db.update("BangCap", cvBC, "MaBangCap = ?", new String[]{String.valueOf(bangCapId)});
+                            if (rows <= 0) Log.w("EditDriver", "Update BangCap returned 0 rows id=" + bangCapId);
+                        } else {
+                            long id = db.insert("BangCap", null, cvBC);
+                            if (id == -1) Log.w("EditDriver", "Insert BangCap returned -1");
+                        }
+                    }
+
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
                 }
 
                 requireActivity().runOnUiThread(() ->
@@ -360,21 +425,21 @@ public class EditDriverFragment extends Fragment {
                 db = dbHelper.getReadableDatabase();
 
                 c = db.rawQuery(
-                        "SELECT ND.MaNguoiDung, ND.MaTaiKhoan, ND.HoTen, ND.CCCD, ND.SDT, ND.TrangThai, TK.Email, ND.NgaySinh, ND.GioiTinh " +
+                        "SELECT ND.MaNguoiDung, ND.MaTaiKhoan, ND.HoTen, ND.CCCD, ND.SDT, TK.MatKhau, TK.Email, ND.NgaySinh, ND.GioiTinh " +
                                 "FROM NguoiDung ND " +
                                 "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                                 "WHERE ND.MaNguoiDung = ?",
                         new String[]{idStr}
                 );
-                String hoTen = null, cccd = null, sdt = null, trangThai = null, email = null, ngaySinh = null, gioiTinh = null;
+                String hoTen = null, cccd = null, sdt = null, matkhau = null, email = null, ngaySinh = null, gioiTinh = null;
                 if (c != null && c.moveToFirst()) {
                     maNguoiDung = c.getInt(0);
                     try { maTaiKhoan = c.getInt(1); } catch (Exception ignored) {}
                     hoTen = safeGetColumn(c, "HoTen", 2);
                     cccd = safeGetColumn(c, "CCCD", 3);
                     sdt = safeGetColumn(c, "SDT", 4);
-                    trangThai = safeGetColumn(c, "TrangThai", 5);
-                    email = safeGetColumn(c, "Email", 6);
+                    matkhau = safeGetColumn(c, "MatKhau", 5); // from TK
+                    email = safeGetColumn(c, "Email", 6);     // from TK
                     ngaySinh = safeGetColumn(c, "NgaySinh", 7);
                     gioiTinh = safeGetColumn(c, "GioiTinh", 8);
                 }
@@ -407,7 +472,10 @@ public class EditDriverFragment extends Fragment {
                 }
                 if (c != null) { c.close(); c = null; }
 
-                final String finalHoTen = hoTen, finalCccd = cccd, finalSdt = sdt, finalTrangThai = trangThai, finalEmail = email;
+                // save original password/email to avoid overwriting with empty later
+                this.originalMatKhau = matkhau;
+
+                final String finalHoTen = hoTen, finalCccd = cccd, finalSdt = sdt, finalMatKhau = matkhau, finalEmail = email;
                 final String finalNgaySinh = ngaySinh, finalGioiTinh = gioiTinh;
                 final String finalChieuCao = chieuCao, finalCanNang = canNang, finalBenhNen = benhNen,
                         finalMaTuy = maTuy, finalNgayKham = ngayKham, finalKetLuan = ketLuan;
@@ -418,7 +486,8 @@ public class EditDriverFragment extends Fragment {
                     if (etCCCD != null) etCCCD.setText(!TextUtils.isEmpty(finalCccd) ? finalCccd : "");
                     if (etPhone != null) etPhone.setText(!TextUtils.isEmpty(finalSdt) ? finalSdt : "");
                     if (etEmail != null) etEmail.setText(!TextUtils.isEmpty(finalEmail) ? finalEmail : "");
-                    if (etWorkStatus != null) etWorkStatus.setText(!TextUtils.isEmpty(finalTrangThai) ? finalTrangThai : "");
+                    // show password from TaiKhoan (read-only)
+                    if (etWorkStatus != null) etWorkStatus.setText(!TextUtils.isEmpty(finalMatKhau) ? finalMatKhau : "");
 
                     if (etBirthday != null) etBirthday.setText(!TextUtils.isEmpty(finalNgaySinh) ? finalNgaySinh : "");
                     if (etGender != null) etGender.setText(!TextUtils.isEmpty(finalGioiTinh) ? finalGioiTinh : "");
@@ -499,7 +568,6 @@ public class EditDriverFragment extends Fragment {
             tv.setTextColor(Color.parseColor("#D32F2F"));
             tv.setTextSize(12);
             LayoutParams lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-            // insert above the editText (index of editText)
             int idx = parent.indexOfChild(editText);
             if (idx >= 0) parent.addView(tv, idx, lp);
             else parent.addView(tv, lp);

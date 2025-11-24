@@ -153,7 +153,7 @@ public class Database extends SQLiteOpenHelper {
                 "FOREIGN KEY (MaXe) REFERENCES Xe(MaXe) ON DELETE CASCADE ON UPDATE CASCADE" +
                 ");");
 // ---------------------------
-// Dữ liệu mẫu (với TrangThaiUpdatedAt và DateCreated cụ thể)
+// Dữ liệu mẫu
 // ---------------------------
 
 // Admin (đã tạo và duyệt từ lâu)
@@ -198,7 +198,7 @@ public class Database extends SQLiteOpenHelper {
 
 // SucKhoe mẫu
         db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
-                "VALUES (1, 1, 172, 68, 'Không', '01/04/2025', '0', 'Đạt');");
+                "VALUES (1, 1, 172, 68, 'Không', '  01/04/2025', '0', 'Đạt');");
         db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
                 "VALUES (2, 2, 165, 58, 'Không', '05/04/2025', '0', 'Đạt');");
 
@@ -222,10 +222,151 @@ public class Database extends SQLiteOpenHelper {
 
 // Telemetry mẫu
         db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
-                "VALUES (1, 1, '10/11/2025 08:30:00', 10.762622, 106.660172, 50, 'Quận 3, TP.HCM', 'Đang chạy');");
+                "VALUES (1, 1, '10/11/2025 08:30:00', 10.762622, 106.660172, 50, 'Quận 3, TP.HCM', 'Đang di chuyển');");
         db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
                 "VALUES (2, 2, '09/11/2025 14:30:00', 16.054406, 108.202167, 0, 'Hải Châu, Đà Nẵng', 'Đỗ');");
 
+
+        // --- Tài khoản / Người dùng (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (5, 'driver5@vms.com', 'driver123');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (5, 5, 'Lê Thị G', '05/05/1995', 'Nữ', '111222333444', '0977000111', 'Nhân viên', 'Đã duyệt', '20/11/2025 10:15:00', '2025-11-15 09:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (6, 'manager1@vms.com', 'mgr12345');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (6, 6, 'Trần Văn H', '12/02/1985', 'Nam', '222333444555', '0919000222', 'Nhân viên', 'Đã duyệt', '15/11/2025 08:00:00', '2025-10-20 08:30:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (7, 'accounting@vms.com', 'acct2025');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (7, 7, 'Phùng Thị I', '30/09/1990', 'Nữ', '333444555666', '0908111223', 'Nhân viên', 'Đã duyệt', '05/11/2025 11:20:00', '2025-09-01 10:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (8, 'driver6@vms.com', 'drv456');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (8, 8, 'Nguyễn Văn K', '09/07/1992', 'Nam', '444555666777', '0987000333', 'Nhân viên', 'Đang yêu cầu', '', '2025-11-22 14:45:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (9, 'driver7@vms.com', 'drv789');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (9, 9, 'Bùi Thị L', '11/11/1996', 'Nữ', '555666777000', '0977000444', 'Nhân viên', 'Đã từ chối', '18/11/2025 09:30:00', '2025-11-18 09:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (10, 'staff3@vms.com', 'staff456');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (10, 10, 'Đặng Văn M', '25/12/1988', 'Nam', '666777888111', '0909000555', 'Nhân viên', 'Đã duyệt', '12/11/2025 17:00:00', '2025-10-10 12:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (11, 'driver8@vms.com', 'driver888');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (11, 11, 'Hoàng Thị N', '02/03/1994', 'Nữ', '777888999222', '0911222444', 'Nhân viên', 'Đã duyệt', '21/11/2025 07:10:00', '2025-11-12 08:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (12, 'ops1@vms.com', 'ops2025');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (12, 12, 'Võ Văn O', '17/06/1987', 'Nam', '888999000333', '0901222333', 'Nhân viên', 'Đã duyệt', '10/11/2025 13:00:00', '2025-10-05 09:30:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (13, 'driver9@vms.com', 'drv999');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (13, 13, 'Trịnh Văn P', '21/01/1984', 'Nam', '999000111222', '0988111333', 'Nhân viên', 'Đã duyệt', '22/11/2025 18:00:00', '2025-11-01 10:00:00');");
+
+        db.execSQL("INSERT OR IGNORE INTO TaiKhoan (MaTaiKhoan, Email, MatKhau) VALUES (14, 'tempuser@vms.com', 'temp123');");
+        db.execSQL("INSERT OR IGNORE INTO NguoiDung (MaNguoiDung, MaTaiKhoan, HoTen, NgaySinh, GioiTinh, CCCD, SDT, VaiTro, TrangThai, TrangThaiUpdatedAt, DateCreated) " +
+                "VALUES (14, 14, 'Test User Q', '01/01/2000', 'Khác', '000111222333', '0900000111', 'Nhân viên', 'Đang yêu cầu', '', '2025-11-23 09:30:00');");
+
+// --- Xe (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (4, 5, '50H-111.11', 'Xe tải', 'ISUZU', 'Xanh', 'IS-11', 'Diesel', 32000, 'Sẵn sàng');");
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (5, 8, '49C-222.22', 'Đầu kéo', 'DAF', 'Đỏ', 'DK-22', 'Diesel', 98000, 'Đang sử dụng');");
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (6, 11, '48B-333.33', 'Xe tải', 'HINO', 'Trắng', 'HX-33', 'Diesel', 41000, 'Bảo trì');");
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (7, 6, '47A-444.44', 'Xe tải', 'MITSUBISHI', 'Xám', 'MT-44', 'Diesel', 150000, 'Đang sử dụng');");
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (8, NULL, '46D-555.55', 'Xe tải', 'VOLVO', 'Đen', 'VL-55', 'Diesel', 20000, 'Sẵn sàng');");
+        db.execSQL("INSERT OR IGNORE INTO Xe (MaXe, MaNguoiDung, BienSo, LoaiXe, HangSX, MauSac, SoHieu, NhienLieu, SoKmTong, TrangThai) " +
+                "VALUES (9, 13, '45E-666.66', 'Đầu kéo', 'SCANIA', 'Bạc', 'SC-66', 'Diesel', 123000, 'Đã nghỉ');");
+
+// --- BaoTri (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (3, 4, '05/11/2025', 'Thay dầu, kiểm tra dây curoa', 'Xưởng A');");
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (4, 5, '18/11/2025', 'Thay lon, cân chỉnh phanh', 'Xưởng B');");
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (5, 6, '10/10/2025', 'Bảo dưỡng định kỳ 10.000 km', 'Xưởng C');");
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (6, 7, '01/09/2025', 'Thay lọc nhiên liệu, vệ sinh kim phun', 'Xưởng D');");
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (7, 8, '20/11/2025', 'Kiểm tra điện, cập nhật firmware thiết bị', 'Xưởng E');");
+        db.execSQL("INSERT OR IGNORE INTO BaoTri (MaBaoTri, MaXe, NgayGanNhat, NoiDung, DonVi) " +
+                "VALUES (8, 9, '12/11/2025', 'Thay má phanh', 'Xưởng F');");
+
+// --- BaoHiem (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
+                "VALUES (3, 4, 'BH-005', 'ABC Insurance', '01/06/2025', '31/05/2026');");
+        db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
+                "VALUES (4, 5, 'BH-006', 'DEF Insurance', '15/07/2025', '14/07/2026');");
+        db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
+                "VALUES (5, 6, 'BH-007', 'GHI Insurance', '01/03/2025', '28/02/2026');");
+        db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
+                "VALUES (6, 7, 'BH-008', 'JKL Insurance', '01/12/2024', '30/11/2025');");
+        db.execSQL("INSERT OR IGNORE INTO BaoHiem (MaBaoHiem, MaXe, SoHD, CongTy, NgayBatDau, NgayKetThuc) " +
+                "VALUES (7, 9, 'BH-009', 'MNO Insurance', '01/08/2025', '31/07/2026');");
+
+// --- SucKhoe (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
+                "VALUES (3, 5, 160, 55, 'Không', '15/11/2025', '0', 'Đạt');");
+        db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
+                "VALUES (4, 8, 175, 78, 'Huyết áp cao', '21/11/2025', '0', 'Cần theo dõi');");
+        db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
+                "VALUES (5, 11, 168, 62, 'Không', '10/11/2025', '0', 'Đạt');");
+        db.execSQL("INSERT OR IGNORE INTO SucKhoe (MaSucKhoe, MaNguoiDung, ChieuCao, CanNang, BenhNen, NgayKham, MaTuy, KetLuan) " +
+                "VALUES (6, 13, 170, 70, 'Tiểu đường', '12/11/2025', '0', 'Cần điều trị');");
+
+// --- BangCap (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
+                "VALUES (3, 5, 'FE', 'FE-010', '01/06/2018', '01/06/2028', 'Hà Nội', 'Hợp lệ');");
+        db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
+                "VALUES (4, 11, 'CE', 'CE-011', '15/03/2019', '15/03/2029', 'TP.HCM', 'Hợp lệ');");
+        db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
+                "VALUES (5, 13, 'FE', 'FE-012', '20/07/2017', '20/07/2027', 'Đà Nẵng', 'Hết hạn');");
+        db.execSQL("INSERT OR IGNORE INTO BangCap (MaBangCap, MaNguoiDung, Loai, SoBang, NgayCap, NgayHetHan, NoiCap, TinhTrang) " +
+                "VALUES (6, 6, 'QL', 'QL-001', '01/01/2015', '01/01/2030', 'Hà Nội', 'Hợp lệ');");
+
+// --- ThietBi (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
+                "VALUES (3, 4, 'Online', '20/11/2025 10:10:00');");
+        db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
+                "VALUES (4, 5, 'Online', '18/11/2025 09:00:00');");
+        db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
+                "VALUES (5, 6, 'Offline', '12/11/2025 16:30:00');");
+        db.execSQL("INSERT OR IGNORE INTO ThietBi (MaThietBi, MaXe, GPS_TrangThai, LastThoiDiemPhatHien) " +
+                "VALUES (6, 8, 'Online', '20/11/2025 07:45:00');");
+
+// --- PhienLaiXe (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
+                "VALUES (3, 4, '20/11/2025 06:00:00', '20/11/2025 15:30:00', 9.5, 180);");
+        db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
+                "VALUES (4, 5, '18/11/2025 07:30:00', '18/11/2025 18:00:00', 10.5, 300);");
+        db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
+                "VALUES (5, 6, '10/11/2025 08:00:00', '10/11/2025 17:00:00', 9, 150);");
+        db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
+                "VALUES (6, 7, '12/11/2025 05:30:00', '12/11/2025 16:00:00', 10.5, 420);");
+        db.execSQL("INSERT OR IGNORE INTO PhienLaiXe (MaPhien, MaXe, ThoiDiemBatDau, ThoiDiemKetThuc, TongGioLai, TongKmTrongNgay) " +
+                "VALUES (7, 9, '22/11/2025 06:00:00', '22/11/2025 14:00:00', 8, 200);");
+
+// --- Telemetry (mẫu bổ sung) ---
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (3, 4, '20/11/2025 08:45:00', 10.762245, 106.682165, 60, 'Quận 1, TP.HCM', 'Đang di chuyển');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (4, 5, '18/11/2025 12:30:00', 30.054200, 110.202500, 0, 'Ngũ Hành Sơn, Đà Nẵng', 'Dừng');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (5, 6, '10/11/2025 09:15:00', 27.028511, 105.804817, 45, 'Hoàn Kiếm, Hà Nội', 'Mất GPS');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (6, 7, '12/11/2025 10:00:00', 20.983933, 105.770783, 30, 'Hải Phòng', 'Đang di chuyển');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (7, 8, '20/11/2025 07:50:00', 19.045162, 105.746857, 0, 'Cần Thơ', 'Đỗ');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (8, 9, '22/11/2025 06:30:00', 12.2388, 109.1967, 55, 'Nha Trang', 'Mất GPS');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (9, 1, '21/11/2025 14:00:00', 10.776889, 106.700806, 0, 'Quận 3, TP.HCM', 'Dừng');");
+        db.execSQL("INSERT OR IGNORE INTO Telemetry (MaTelemetry, MaXe, ThoiGian, Lat, Lon, TocDo, ViTri, TrangThaiXe) " +
+                "VALUES (10, 2, '19/11/2025 15:45:00', 16.0727, 108.2140, 0, 'Hải Châu, Đà Nẵng', 'Đỗ');");
     }
 
     @Override

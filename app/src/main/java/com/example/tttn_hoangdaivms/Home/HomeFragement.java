@@ -287,7 +287,7 @@ public class HomeFragement extends Fragment {
         Cursor cursor = null;
         try {
             cursor = db.rawQuery(
-                    "SELECT ND.HoTen, ND.CCCD, ND.SDT, TK.Email, ND.TrangThai " +
+                    "SELECT ND.HoTen, ND.CCCD, ND.SDT, TK.Email, TK.MatKhau " +
                             "FROM NguoiDung ND " +
                             "JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE TK.Email = ?",
@@ -299,13 +299,13 @@ public class HomeFragement extends Fragment {
                 String cccd = getColumnSafe(cursor, "CCCD", 1);
                 String sdt = getColumnSafe(cursor, "SDT", 2);
                 String email = getColumnSafe(cursor, "Email", 3);
-                String trangThai = getColumnSafe(cursor, "TrangThai", 4);
+                String matkhau = getColumnSafe(cursor, "MatKhau", 4);
 
                 tvName.setText(notEmptyOrDefault(hoTen, "—"));
                 tvCCCD.setText(notEmptyOrDefault(cccd, "—"));
                 tvPhone.setText(notEmptyOrDefault(sdt, "—"));
                 tvEmail.setText(notEmptyOrDefault(email, "—"));
-                tvStatus.setText(notEmptyOrDefault(trangThai, "—"));
+                tvStatus.setText(notEmptyOrDefault(matkhau, "—"));
 
                 tvUserName.setText(notEmptyOrDefault(hoTen, "Người dùng"));
             } else {

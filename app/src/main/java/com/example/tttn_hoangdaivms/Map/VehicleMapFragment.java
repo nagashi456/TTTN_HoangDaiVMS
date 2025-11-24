@@ -217,7 +217,7 @@ public class VehicleMapFragment extends Fragment implements OnMapReadyCallback {
         new Thread(() -> {
             String sql =
                     "SELECT X.MaXe, X.BienSo, X.LoaiXe, X.SoHieu, N.HoTen, " +
-                            "T.ThoiGian, T.Lat, T.Lon, T.TocDo, T.ViTri, X.NhienLieu, X.SoKmTong, X.TrangThai " +
+                            "T.ThoiGian, T.Lat, T.Lon, T.TocDo, T.ViTri, X.NhienLieu, X.SoKmTong, T.TrangThaiXe " +
                             "FROM Xe X " +
                             "LEFT JOIN NguoiDung N ON X.MaNguoiDung = N.MaNguoiDung " +
                             "LEFT JOIN Telemetry T ON X.MaXe = T.MaXe " +
@@ -247,7 +247,7 @@ public class VehicleMapFragment extends Fragment implements OnMapReadyCallback {
 
                         String viTri = safeGet(c, "ViTri");
                         String nhienLieu = safeGet(c, "NhienLieu");
-                        String trangThaiXe = safeGet(c, "TrangThai");
+                        String trangThaiXe = safeGet(c, "TrangThaiXe");
 
                         VehiclePoint vp = new VehiclePoint(maXe, bienSo, loai, vin, tenLai,
                                 thoiGian, lat, lon, tocDo, viTri, nhienLieu, soKmTong, trangThaiXe);
@@ -376,17 +376,53 @@ public class VehicleMapFragment extends Fragment implements OnMapReadyCallback {
     private enum VehicleStatus { MOVING, STOPPED_SHORT, PARKED_LONG, NO_GPS }
 
     private VehicleStatus computeStatus(VehiclePoint vp, long nowMs) {
+        // bảo vệ toạ độ
         if (Double.isNaN(vp.lat) || Double.isNaN(vp.lon)) return VehicleStatus.NO_GPS;
-        if (vp.trangThaiXe != null && vp.trangThaiXe.toLowerCase().contains("gps") && vp.trangThaiXe.toLowerCase().contains("lost"))
-            return VehicleStatus.NO_GPS;
 
+        String raw = vp.trangThaiXe == null ? "" : vp.trangThaiXe.trim().toLowerCase();
+
+        // kiểm tra trường hợp liên quan GPS mất tín hiệu
+        if (containsAny(raw, "mất gps","gps lost", "lost gps", "no gps") ||
+                (raw.contains("gps") && raw.contains("lost"))) {
+            return VehicleStatus.NO_GPS;
+        }
+
+
+        // trạng thái di chuyển theo chuỗi
+        if (containsAny(raw, "chạy", "đang di chuyển", "di_chuyen", "di-chuyen", "moving", "running", "run")) {
+            return VehicleStatus.MOVING;
+        }
+
+        // trạng thái dừng ngắn theo chuỗi
+        if (containsAny(raw, "dừng", "dung", "stop", "stopped", "idle")) {
+            return VehicleStatus.STOPPED_SHORT;
+        }
+
+        // trạng thái đỗ dài theo chuỗi
+        if (containsAny(raw, "đỗ", "do", "parking", "parked", "park")) {
+            return VehicleStatus.PARKED_LONG;
+        }
+
+        // --- fallback: dùng thời gian và tốc độ ---
         long tms = parseTimeToMillis(vp.thoiGian);
         long diffSec = (tms <= 0) ? Long.MAX_VALUE : (nowMs - tms) / 1000L;
-        double speed = vp.tocDo;
+        double speed = vp.tocDo; // giả sử tocDo đã được set hợp lệ
+
         if (speed > 0.1) return VehicleStatus.MOVING;
         if (diffSec <= 3600) return VehicleStatus.STOPPED_SHORT;
         return VehicleStatus.PARKED_LONG;
     }
+
+    // Helper: kiểm tra chuỗi raw có chứa bất kỳ keyword nào (đã lower-case)
+    private boolean containsAny(String raw, String... keywords) {
+        if (raw == null || raw.isEmpty()) return false;
+        for (String k : keywords) {
+            if (k == null) continue;
+            if (raw.contains(k.toLowerCase())) return true;
+        }
+        return false;
+    }
+
 
     // convert drawable resource into BitmapDescriptor; also centers anchor in markerOptions above
     private BitmapDescriptor getCarIconForStatus(VehicleStatus vs, String plate) {

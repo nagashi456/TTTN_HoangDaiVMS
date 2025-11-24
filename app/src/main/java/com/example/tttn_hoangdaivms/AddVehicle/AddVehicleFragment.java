@@ -3,16 +3,21 @@ package com.example.tttn_hoangdaivms.AddVehicle;
 import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,9 +30,14 @@ import com.example.tttn_hoangdaivms.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 public class AddVehicleFragment extends Fragment {
 
@@ -42,15 +52,20 @@ public class AddVehicleFragment extends Fragment {
     private MaterialAutoCompleteTextView actvAssignDriver;
     private ArrayAdapter<String> driverAdapter;
     private final List<String> driverNames = new ArrayList<>();
-    private final List<String> driverIds = new ArrayList<>(); // parallel list: same index -> MaNguoiDung (String)
+    private final List<String> driverIds = new ArrayList<>(); // parallel list
 
-    // nếu chỉnh sửa, có thể có id hoặc flag
     private boolean isEdit = false;
     private String vehicleId = null;
 
-    // SharedPrefs keys
     private static final String PREFS_NAME = "user_prefs";
     private static final String PREF_KEY_EMAIL = "email";
+
+    // Validation helpers
+    private static final Pattern PLATE_ALLOWED = Pattern.compile("^[A-Za-z0-9\\s-]+$");
+    private static final int PLATE_MAX_LENGTH = 50;
+    private static final SimpleDateFormat UI_DATE_FORMAT = new SimpleDateFormat("d/M/yyyy", Locale.getDefault());
+
+    public AddVehicleFragment() { /* required */ }
 
     @Nullable
     @Override
@@ -80,16 +95,15 @@ public class AddVehicleFragment extends Fragment {
         btnSave = view.findViewById(R.id.btnSave);
         ivBack = view.findViewById(R.id.ivBack);
 
-        // CHILD view: AutoCompleteTextView (không map TextInputLayout)
         actvAssignDriver = view.findViewById(R.id.actvAssignDriver);
 
-        // Nếu có args (chỉnh sửa) -> điền dữ liệu lên fields
         readArgumentsAndPopulate();
 
-        // load danh sách tài xế cho dropdown
+        // Date pickers: set InputType none and open DatePicker on click
+        prepareDatePickers();
+
         loadDriversForDropdown();
 
-        // Gắn listener
         setupListeners();
 
         return view;
@@ -105,7 +119,6 @@ public class AddVehicleFragment extends Fragment {
             vehicleId = args.getString("id", null);
         }
 
-        // Các trường khác (nếu có) sẽ được đổ vào EditText
         putIfNotNull(edtBienSo, args.getString("bienSo", null));
         putIfNotNull(edtLoaiXe, args.getString("loaiXe", null));
         putIfNotNull(edtHangSX, args.getString("hangSX", null));
@@ -122,7 +135,6 @@ public class AddVehicleFragment extends Fragment {
         putIfNotNull(edtNgayGanNhat, args.getString("ngayGanNhat", null));
         putIfNotNull(edtDonViThucHien, args.getString("donViThucHien", null));
 
-        // Nếu fragment nhận sẵn driver id/name (edit case) — set text
         if (args != null) {
             String assignedDriverName = args.getString("assignedDriverName", null);
             if (assignedDriverName != null && actvAssignDriver != null) {
@@ -136,8 +148,26 @@ public class AddVehicleFragment extends Fragment {
         if (value != null) edt.setText(value);
     }
 
+    private void prepareDatePickers() {
+        // ensure edittexts open date picker and don't show keyboard
+        if (edtNgayBatDau != null) {
+            edtNgayBatDau.setInputType(InputType.TYPE_NULL);
+            edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
+            edtNgayBatDau.setOnFocusChangeListener((v, hasFocus) -> { if (hasFocus) showDatePicker(edtNgayBatDau); });
+        }
+        if (edtNgayKetThuc != null) {
+            edtNgayKetThuc.setInputType(InputType.TYPE_NULL);
+            edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
+            edtNgayKetThuc.setOnFocusChangeListener((v, hasFocus) -> { if (hasFocus) showDatePicker(edtNgayKetThuc); });
+        }
+        if (edtNgayGanNhat != null) {
+            edtNgayGanNhat.setInputType(InputType.TYPE_NULL);
+            edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
+            edtNgayGanNhat.setOnFocusChangeListener((v, hasFocus) -> { if (hasFocus) showDatePicker(edtNgayGanNhat); });
+        }
+    }
+
     private void setupListeners() {
-        // Back: pop
         if (ivBack != null) {
             ivBack.setOnClickListener(v -> {
                 hideKeyboard();
@@ -147,61 +177,54 @@ public class AddVehicleFragment extends Fragment {
             });
         }
 
-        // Date pickers
-        if (edtNgayBatDau != null) edtNgayBatDau.setOnClickListener(v -> showDatePicker(edtNgayBatDau));
-        if (edtNgayKetThuc != null) edtNgayKetThuc.setOnClickListener(v -> showDatePicker(edtNgayKetThuc));
-        if (edtNgayGanNhat != null) edtNgayGanNhat.setOnClickListener(v -> showDatePicker(edtNgayGanNhat));
-
-        // ensure the AutoCompleteTextView is focusable and will show dropdown
         if (actvAssignDriver != null) {
-            actvAssignDriver.setThreshold(0); // show even with 0 chars
+            actvAssignDriver.setThreshold(0);
             actvAssignDriver.setOnClickListener(v -> {
                 if (driverAdapter != null && driverNames.size() > 0) {
                     actvAssignDriver.showDropDown();
                 } else {
-                    Toast.makeText(requireContext(), "Chưa có tài xế để chọn", Toast.LENGTH_SHORT).show();
+                    setFieldErrorAbove(actvAssignDriver, "Không có tài xế để chọn");
                 }
             });
             actvAssignDriver.setOnFocusChangeListener((v, hasFocus) -> {
-                if (hasFocus && driverAdapter != null && driverNames.size() > 0) {
-                    actvAssignDriver.showDropDown();
-                }
+                if (hasFocus && driverAdapter != null && driverNames.size() > 0) actvAssignDriver.showDropDown();
             });
         }
 
-        // Save
         if (btnSave != null) {
             btnSave.setOnClickListener(v -> {
                 hideKeyboard();
+                // clear previous inline errors
+                if (edtBienSo != null) removeFieldErrorAbove(edtBienSo);
+                if (edtNgayBatDau != null) removeFieldErrorAbove(edtNgayBatDau);
+                if (edtNgayKetThuc != null) removeFieldErrorAbove(edtNgayKetThuc);
+                if (edtNgayGanNhat != null) removeFieldErrorAbove(edtNgayGanNhat);
+                if (actvAssignDriver != null) removeFieldErrorAbove(actvAssignDriver);
+
+                // run validation; if invalid, errors already shown above fields
                 if (!validateInputs()) return;
 
-                // Lấy selected driver name ở UI thread
+                // proceed with save (existing logic)
                 final String selectedDriverName = actvAssignDriver == null ? null : actvAssignDriver.getText().toString().trim();
 
-                // Lấy dữ liệu từ form
                 final String bienSo = getText(edtBienSo);
                 final String loaiXe = getText(edtLoaiXe);
                 final String hangSX = getText(edtHangSX);
                 final String mauSac = getText(edtMauSac);
                 final String soHieu = getText(edtSoHieuLop);
-
-                // fuel
                 final String nhienLieu = getText(edtNhienLieu);
-
                 final String soHopDong = getText(edtSoHopDong);
                 final String ngayBatDau = getText(edtNgayBatDau);
                 final String ngayKetThuc = getText(edtNgayKetThuc);
                 final String congTy = getText(edtCongTyBH);
-
                 final String noiDung = getText(edtNoiDung);
                 final String ngayGanNhat = getText(edtNgayGanNhat);
                 final String donVi = getText(edtDonViThucHien);
 
-                // Lấy email người dùng hiện tại: ưu tiên arguments -> SharedPreferences
+                // lấy email hiện tại
                 String currentEmail = null;
                 Bundle args = getArguments();
                 if (args != null) currentEmail = args.getString("currentEmail", null);
-
                 if (currentEmail == null && getActivity() != null) {
                     SharedPreferences prefs = getActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                     currentEmail = prefs.getString(PREF_KEY_EMAIL, null);
@@ -212,9 +235,7 @@ public class AddVehicleFragment extends Fragment {
                 new Thread(() -> {
                     Database db = new Database(requireContext());
                     try {
-                        int maTaiXeToAssign = -1;
-
-                        // try find selectedDriverName index in driverNames
+                        int maTaiXeToAssign = -1; // -1 => not set (will fallback)
                         if (selectedDriverName != null && !selectedDriverName.isEmpty()) {
                             int idx = -1;
                             synchronized (driverNames) {
@@ -234,43 +255,46 @@ public class AddVehicleFragment extends Fragment {
                             }
                         }
 
-                        // fallback to current user if none selected
+                        // if user left driver empty (maTaiXeToAssign == -1) => fallback to current user if available
                         if (maTaiXeToAssign == -1 && finalCurrentEmail != null) {
                             User currentUser = db.getUserByEmail(finalCurrentEmail);
                             if (currentUser != null) maTaiXeToAssign = currentUser.getMaNguoiDung();
                         }
 
+                        // if maTaiXeToAssign still -1 => no assignment and no fallback, we treat as error
+                        // BUT if user explicitly chose "Không gán" we set maTaiXeToAssign == 0 (means explicit no-assign)
+                        // Note: we added "Không gán" with id "0" in loadDriversForDropdown()
+                        // So maTaiXeToAssign == 0 means user selected explicit "Không gán"
                         if (maTaiXeToAssign == -1) {
+                            final int finalVal = maTaiXeToAssign;
                             requireActivity().runOnUiThread(() ->
-                                    Toast.makeText(requireContext(), "Vui lòng chọn tài xế để gán (hoặc đăng nhập trước).", Toast.LENGTH_LONG).show()
+                                    setFieldErrorAbove(actvAssignDriver, "Vui lòng chọn tài xế để gán (hoặc chọn 'Không gán')")
                             );
                             return;
                         }
 
-                        final int assignedId = maTaiXeToAssign;
+                        final int assignedId = maTaiXeToAssign; // may be >0 (real id) or 0 (explicit no-assign)
 
-                        // soKmTong: nếu bạn muốn lấy từ UI, thêm EditText và parse ở đây; hiện để null (DB xử lý default)
                         final Double soKmTong = null;
-                        // trangThaiXe: nếu bạn muốn lấy từ UI, thêm EditText; đặt mặc định rỗng
                         final String trangThaiXe = "";
 
                         boolean inserted = db.insertXeWithBaoTriAndBaoHiem(
-                                bienSo,            // BienSo
-                                loaiXe,            // LoaiXe
-                                hangSX,            // HangSX
-                                mauSac,            // MauSac
-                                soHieu,            // SoHieu
-                                nhienLieu,         // NhienLieu
-                                soKmTong,          // SoKmTong (Double, có thể null)
-                                trangThaiXe,       // TrangThai (String)
-                                ngayGanNhat,       // NgayGanNhat (BaoTri)
-                                noiDung,           // NoiDung (BaoTri)
-                                donVi,             // DonVi (BaoTri)
-                                assignedId,        // MaNguoiDung (chủ xe)
-                                soHopDong,         // SoHD (BaoHiem) - ở DB hiện MaXe liên kết BaoHiem nên hàm sẽ tạo BaoHiem gắn MaXe vừa tạo
-                                congTy,            // CongTy (BaoHiem)
-                                ngayBatDau,        // NgayBatDau (BaoHiem)
-                                ngayKetThuc        // NgayKetThuc (BaoHiem)
+                                bienSo,
+                                loaiXe,
+                                hangSX,
+                                mauSac,
+                                soHieu,
+                                nhienLieu,
+                                soKmTong,
+                                trangThaiXe,
+                                ngayGanNhat,
+                                noiDung,
+                                donVi,
+                                assignedId, // pass 0 if explicit no-assign; DB should handle 0 as null if needed
+                                soHopDong,
+                                congTy,
+                                ngayBatDau,
+                                ngayKetThuc
                         );
 
                         if (inserted) {
@@ -322,10 +346,8 @@ public class AddVehicleFragment extends Fragment {
             List<String> names = new ArrayList<>();
             List<String> ids = new ArrayList<>();
             try {
-                // Tìm cả các biến thể có dấu & không dấu để tăng khả năng khớp
-                android.database.Cursor cursor = db.getDriversCursor(); // nếu bạn đã thêm helper này
+                android.database.Cursor cursor = db.getDriversCursor();
                 if (cursor == null) {
-                    // fallback: query inline (nếu helper chưa tồn tại)
                     cursor = db.getReadableDatabase().rawQuery(
                             "SELECT MaNguoiDung, HoTen FROM NguoiDung " +
                                     "WHERE lower(COALESCE(VaiTro,'')) LIKE ? " +
@@ -353,6 +375,11 @@ public class AddVehicleFragment extends Fragment {
             requireActivity().runOnUiThread(() -> {
                 driverNames.clear();
                 driverIds.clear();
+
+                // add explicit "Không gán" option at the top with id = "0"
+                driverNames.add("Không gán");
+                driverIds.add("0");
+
                 driverNames.addAll(names);
                 driverIds.addAll(ids);
 
@@ -379,30 +406,175 @@ public class AddVehicleFragment extends Fragment {
         return edt != null ? edt.getText().toString().trim() : "";
     }
 
-    private boolean validateInputs() {
-        if (edtBienSo == null || TextUtils.isEmpty(edtBienSo.getText())) {
-            if (edtBienSo != null) {
-                edtBienSo.setError("Vui lòng nhập biển số");
-                edtBienSo.requestFocus();
+    // ---------------- inline-error helpers (show TextView above EditText / View) ----------------
+
+    private void setFieldErrorAbove(final EditText editText, final String message) {
+        if (editText == null) return;
+        requireActivity().runOnUiThread(() -> {
+            ViewParent p = editText.getParent();
+            if (!(p instanceof ViewGroup)) return;
+            ViewGroup row = (ViewGroup) p;
+
+            ViewParent gp = row.getParent();
+            ViewGroup container = (gp instanceof ViewGroup) ? (ViewGroup) gp : row;
+
+            String tag = "error_above_" + editText.getId();
+            View existing = container.findViewWithTag(tag);
+            if (existing instanceof TextView) {
+                ((TextView) existing).setText(message);
+                existing.setVisibility(View.VISIBLE);
+                return;
             }
-            return false;
+
+            TextView tv = new TextView(requireContext());
+            tv.setTag(tag);
+            tv.setText(message);
+            tv.setTextColor(Color.parseColor("#D32F2F"));
+            tv.setTextSize(12);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            lp.setMargins(0, 6, 0, 6);
+
+            int insertIdx = -1;
+            if (container != null) {
+                try {
+                    insertIdx = container.indexOfChild(row);
+                } catch (Exception ignored) { insertIdx = -1; }
+            }
+            if (insertIdx >= 0) container.addView(tv, insertIdx, lp);
+            else {
+                int idx = row.indexOfChild(editText);
+                if (idx >= 0) row.addView(tv, idx, lp);
+                else row.addView(tv, lp);
+            }
+        });
+    }
+
+    private void removeFieldErrorAbove(final EditText editText) {
+        if (editText == null) return;
+        requireActivity().runOnUiThread(() -> {
+            ViewParent p = editText.getParent();
+            if (!(p instanceof ViewGroup)) return;
+            ViewGroup row = (ViewGroup) p;
+            ViewParent gp = row.getParent();
+            ViewGroup container = (gp instanceof ViewGroup) ? (ViewGroup) gp : row;
+
+            String tag = "error_above_" + editText.getId();
+            View existing = container.findViewWithTag(tag);
+            if (existing != null) container.removeView(existing);
+        });
+    }
+
+    /**
+     * Validate inputs and show inline errors above fields.
+     * Returns true if all valid.
+     */
+    private boolean validateInputs() {
+        boolean ok = true;
+
+        // Plate required
+        String plate = getText(edtBienSo);
+        if (TextUtils.isEmpty(plate)) {
+            setFieldErrorAbove(edtBienSo, "Vui lòng điền biển số xe");
+            ok = false;
+        } else {
+            if (plate.length() > PLATE_MAX_LENGTH || !PLATE_ALLOWED.matcher(plate).matches()) {
+                setFieldErrorAbove(edtBienSo, "Định dạng biển số không hợp lệ");
+                ok = false;
+            }
         }
-        return true;
+
+        // Driver selection:
+        // If user chooses "Không gán" (id==0) it's fine.
+        // If user typed empty -> we'll fallback to current user later.
+        // But if user typed something not in list -> error.
+        String selDriver = actvAssignDriver == null ? "" : actvAssignDriver.getText().toString().trim();
+        if (!TextUtils.isEmpty(selDriver)) {
+            boolean found = false;
+            synchronized (driverNames) {
+                for (String n : driverNames) {
+                    if (n.equals(selDriver)) { found = true; break; }
+                }
+            }
+            if (!found) {
+                setFieldErrorAbove(actvAssignDriver, "Vui lòng chọn một tài xế");
+                ok = false;
+            }
+        }
+
+        // Date comparisons
+        String sStart = getText(edtNgayBatDau);
+        String sEnd = getText(edtNgayKetThuc);
+        Date start = parseDateSafe(sStart);
+        Date end = parseDateSafe(sEnd);
+        if (!TextUtils.isEmpty(sStart) && !TextUtils.isEmpty(sEnd)) {
+            if (start == null) { setFieldErrorAbove(edtNgayBatDau, "Ngày bắt đầu không hợp lệ"); ok = false; }
+            if (end == null) { setFieldErrorAbove(edtNgayKetThuc, "Ngày kết thúc không hợp lệ"); ok = false; }
+            if (start != null && end != null) {
+                if (removeTime(start).after(removeTime(end))) {
+                    setFieldErrorAbove(edtNgayBatDau, "Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc");
+                    setFieldErrorAbove(edtNgayKetThuc, "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu");
+                    ok = false;
+                }
+            }
+        }
+
+        // Recent date must not be future
+        String sRecent = getText(edtNgayGanNhat);
+        if (!TextUtils.isEmpty(sRecent)) {
+            Date recent = parseDateSafe(sRecent);
+            if (recent == null) { setFieldErrorAbove(edtNgayGanNhat, "Ngày gần nhất không hợp lệ"); ok = false; }
+            else if (removeTime(recent).after(removeTime(new Date()))) {
+                setFieldErrorAbove(edtNgayGanNhat, "Ngày gần nhất không được là ngày tương lai");
+                ok = false;
+            }
+        }
+
+        return ok;
+    }
+
+    private Date parseDateSafe(String s) {
+        if (TextUtils.isEmpty(s)) return null;
+        try {
+            SimpleDateFormat sdf1 = new SimpleDateFormat("d/M/yyyy", Locale.getDefault());
+            sdf1.setLenient(false);
+            return sdf1.parse(s);
+        } catch (ParseException ignored) { }
+        try {
+            SimpleDateFormat sdf2 = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            sdf2.setLenient(false);
+            return sdf2.parse(s);
+        } catch (ParseException ignored) { }
+        return null;
+    }
+
+    private Date removeTime(Date d) {
+        Calendar c = Calendar.getInstance();
+        c.setTime(d);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTime();
     }
 
     private void showDatePicker(final EditText target) {
         final Calendar c = Calendar.getInstance();
+        String curText = target.getText() == null ? "" : target.getText().toString().trim();
+        Date parsed = parseDateSafe(curText);
+        if (parsed != null) c.setTime(parsed);
+
         int y = c.get(Calendar.YEAR);
         int m = c.get(Calendar.MONTH);
         int d = c.get(Calendar.DAY_OF_MONTH);
 
         DatePickerDialog dpd = new DatePickerDialog(requireContext(),
-                new DatePickerDialog.OnDateSetListener() {
-                    @Override
-                    public void onDateSet(DatePicker view, int year, int month, int dayOfMonth) {
-                        String date = dayOfMonth + "/" + (month + 1) + "/" + year;
-                        target.setText(date);
-                    }
+                (view, year, month, dayOfMonth) -> {
+                    String date = dayOfMonth + "/" + (month + 1) + "/" + year;
+                    target.setText(date);
                 }, y, m, d);
         dpd.show();
     }

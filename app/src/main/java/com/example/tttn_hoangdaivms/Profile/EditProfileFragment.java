@@ -57,6 +57,7 @@ public class EditProfileFragment extends Fragment {
 
     private Database dbHelper;
     private int userId = -1;
+    private int maTaiKhoan = -1; // thêm để lưu id tài khoản
     private String userEmail;
     private String userRole = ""; // VaiTro lấy từ DB
 
@@ -70,6 +71,8 @@ public class EditProfileFragment extends Fragment {
     private static final Pattern PHONE_PATTERN_10_11 = Pattern.compile("^\\d{10,11}$");
     private static final Pattern CCCD_PATTERN = Pattern.compile("^\\d{12}$");
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    // password rule: min 8 chars, at least one digit, one lower, one upper, one special from @#$%&
+    private static final Pattern PASSWORD_STRONG_PATTERN = Pattern.compile("^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#\\$%&]).{8,}$");
 
     public EditProfileFragment() { /* required */ }
 
@@ -138,16 +141,11 @@ public class EditProfileFragment extends Fragment {
         // load
         loadUserAndHealth(userEmail);
 
-        // disable edit on email and status
+        // disable edit on email (ui)
         if (edtEmail != null) {
             edtEmail.setEnabled(false);
             edtEmail.setFocusable(false);
             edtEmail.setClickable(false);
-        }
-        if (edtStatus != null) {
-            edtStatus.setEnabled(false);
-            edtStatus.setFocusable(false);
-            edtStatus.setClickable(false);
         }
 
         // clear inline error label when user types
@@ -181,7 +179,7 @@ public class EditProfileFragment extends Fragment {
                     .setPositiveButton("Có", (dialog, which) -> {
                         boolean ok = validateAllInputsAndShowErrors();
                         if (ok) {
-                            saveData(); // original save logic (kept)
+                            saveData(); // save with TaiKhoan logic
                         } else {
                             Toast.makeText(requireContext(), "Vui lòng sửa các trường có lỗi", Toast.LENGTH_SHORT).show();
                         }
@@ -264,7 +262,7 @@ public class EditProfileFragment extends Fragment {
             db = dbHelper.getReadableDatabase();
 
             cursor = db.rawQuery(
-                    "SELECT ND.MaNguoiDung, ND.HoTen, ND.CCCD, ND.SDT, ND.TrangThai, COALESCE(ND.VaiTro, ''), ND.NgaySinh, ND.GioiTinh, TK.Email " +
+                    "SELECT ND.MaNguoiDung, ND.MaTaiKhoan, ND.HoTen, ND.CCCD, ND.SDT, TK.MatKhau, COALESCE(ND.VaiTro, ''), ND.NgaySinh, ND.GioiTinh, TK.Email " +
                             "FROM NguoiDung ND " +
                             "LEFT JOIN TaiKhoan TK ON ND.MaTaiKhoan = TK.MaTaiKhoan " +
                             "WHERE TK.Email = ?",
@@ -273,14 +271,15 @@ public class EditProfileFragment extends Fragment {
 
             if (cursor != null && cursor.moveToFirst()) {
                 userId = cursor.getInt(0);
-                String hoTen = safeGet(cursor, 1);
-                String cccd = safeGet(cursor, 2);
-                String sdt = safeGet(cursor, 3);
-                String trangThai = safeGet(cursor, 4);
-                String vaiTro = safeGet(cursor, 5);
-                String ngaySinh = safeGet(cursor, 6);
-                String gioiTinh = safeGet(cursor, 7);
-                String emailFromDb = safeGet(cursor, 8);
+                try { maTaiKhoan = cursor.getInt(1); } catch (Exception ignored) { maTaiKhoan = -1; }
+                String hoTen = safeGet(cursor, 2);
+                String cccd = safeGet(cursor, 3);
+                String sdt = safeGet(cursor, 4);
+                String matkhau = safeGet(cursor, 5);
+                String vaiTro = safeGet(cursor, 6);
+                String ngaySinh = safeGet(cursor, 7);
+                String gioiTinh = safeGet(cursor, 8);
+                String emailFromDb = safeGet(cursor, 9);
 
                 userRole = vaiTro != null ? vaiTro.trim() : "";
 
@@ -288,7 +287,7 @@ public class EditProfileFragment extends Fragment {
                 if (edtCCCD != null) edtCCCD.setText(notEmpty(cccd, ""));
                 if (edtPhone != null) edtPhone.setText(notEmpty(sdt, ""));
                 if (edtEmail != null) edtEmail.setText(notEmpty(emailFromDb, email));
-                if (edtStatus != null) edtStatus.setText(notEmpty(trangThai, ""));
+                if (edtStatus != null) edtStatus.setText(notEmpty(matkhau, ""));
                 if (edtBirthday != null) {
                     Date d = tryParseDate(notEmpty(ngaySinh, ""));
                     if (d != null) edtBirthday.setText(uiDateFormat.format(d));
@@ -345,7 +344,7 @@ public class EditProfileFragment extends Fragment {
             if (showDegree) {
                 cursor = db.rawQuery(
                         "SELECT MaBangCap, Loai, NgayCap, NgayHetHan, NoiCap " +
-                                "FROM BangCap WHERE MaTaiXe = ? LIMIT 1",
+                                "FROM BangCap WHERE MaNguoiDung = ? LIMIT 1",
                         new String[]{String.valueOf(userId)}
                 );
 
@@ -385,13 +384,13 @@ public class EditProfileFragment extends Fragment {
         }
     }
 
-    // ---------- Save (unchanged logic but extended for NgaySinh/GioiTinh/NgayCap) ----------
+    // ---------- Save (chỉnh: MatKhau/Email xử lý trong TaiKhoan; NguoiDung không lưu MatKhau) ----------
     private void saveData() {
         String name = edtName.getText().toString().trim();
         String cccd = edtCCCD.getText().toString().trim();
         String phone = edtPhone.getText().toString().trim();
         String email = edtEmail.getText().toString().trim();
-        String trangThai = edtStatus.getText().toString().trim();
+        String matkhau = edtStatus.getText().toString().trim();
 
         String chieuCaoStr = edtHeight.getText().toString().trim();
         String canNangStr = edtWeight.getText().toString().trim();
@@ -418,94 +417,138 @@ public class EditProfileFragment extends Fragment {
             return;
         }
 
+        boolean isAdmin = isAdminRole(userRole);
+
+        // Nếu user không phải admin và user nhập mật khẩu (không rỗng) -> validate theo rule
+        if (!isAdmin && !TextUtils.isEmpty(matkhau)) {
+            if (!PASSWORD_STRONG_PATTERN.matcher(matkhau).matches()) {
+                setFieldErrorAbove(edtStatus, "Mật khẩu không hợp lệ");
+                Toast.makeText(requireContext(), "Mật khẩu không hợp lệ", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+
         SQLiteDatabase db = null;
         Cursor cursor = null;
         try {
             db = dbHelper.getWritableDatabase();
-
-            ContentValues userValues = new ContentValues();
-            userValues.put("HoTen", name);
-            userValues.put("CCCD", cccd);
-            userValues.put("SDT", phone);
-            if (!TextUtils.isEmpty(trangThai)) userValues.put("TrangThai", trangThai);
-            if (!TextUtils.isEmpty(ngaySinh)) userValues.put("NgaySinh", ngaySinh);
-            if (!TextUtils.isEmpty(gioiTinh)) userValues.put("GioiTinh", gioiTinh);
-
-            int updated = db.update("NguoiDung", userValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
-
-            cursor = db.rawQuery("SELECT MaSucKhoe FROM SucKhoe WHERE MaNguoiDung = ?", new String[]{String.valueOf(userId)});
-            if (cursor != null && cursor.moveToFirst()) {
-                ContentValues healthValues = new ContentValues();
-                Double chieuCao = parseDoubleOrNull(chieuCaoStr);
-                Double canNang = parseDoubleOrNull(canNangStr);
-                if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
-                else healthValues.putNull("ChieuCao");
-                if (canNang != null) healthValues.put("CanNang", canNang);
-                else healthValues.putNull("CanNang");
-
-                healthValues.put("BenhNen", benhNen);
-                healthValues.put("NgayKham", ngayKham);
-                Integer maTuyInt = parseIntOrNull(maTuy);
-                if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
-                else if (!maTuy.isEmpty()) healthValues.put("MaTuy", maTuy);
-                healthValues.put("KetLuan", ketLuan);
-
-                int healthUpdated = db.update("SucKhoe", healthValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
-                if (healthUpdated < 1) {
-                    healthValues.put("MaNguoiDung", userId);
-                    db.insert("SucKhoe", null, healthValues);
-                }
-            } else {
-                ContentValues healthValues = new ContentValues();
-                healthValues.put("MaNguoiDung", userId);
-                Double chieuCao = parseDoubleOrNull(chieuCaoStr);
-                Double canNang = parseDoubleOrNull(canNangStr);
-                if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
-                if (canNang != null) healthValues.put("CanNang", canNang);
-                healthValues.put("BenhNen", benhNen);
-                healthValues.put("NgayKham", ngayKham);
-                Integer maTuyInt = parseIntOrNull(maTuy);
-                if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
-                healthValues.put("KetLuan", ketLuan);
-
-                db.insert("SucKhoe", null, healthValues);
-            }
-            if (cursor != null) { cursor.close(); cursor = null; }
-
-            if (!isAdminRole(userRole)) {
-                cursor = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaTaiXe = ?", new String[]{String.valueOf(userId)});
-                ContentValues bcValues = new ContentValues();
-                bcValues.put("MaTaiXe", userId);
-                if (!TextUtils.isEmpty(loai)) bcValues.put("Loai", loai);
-                else bcValues.putNull("Loai");
-                if (!TextUtils.isEmpty(ngayCap)) bcValues.put("NgayCap", ngayCap);
-                else bcValues.putNull("NgayCap");
-                if (!TextUtils.isEmpty(ngayHetHan)) bcValues.put("NgayHetHan", ngayHetHan);
-                else bcValues.putNull("NgayHetHan");
-                if (!TextUtils.isEmpty(noiCap)) bcValues.put("NoiCap", noiCap);
-                else bcValues.putNull("NoiCap");
-
-                if (cursor != null && cursor.moveToFirst()) {
-                    int rows = db.update("BangCap", bcValues, "MaTaiXe = ?", new String[]{String.valueOf(userId)});
-                    if (rows > 0) {
-                        Toast.makeText(requireContext(), "Cập nhật bằng cấp thành công.", Toast.LENGTH_SHORT).show();
-                    } else {
-                        long id = db.insert("BangCap", null, bcValues);
-                        if (id != -1) Toast.makeText(requireContext(), "Lưu bằng cấp (tạo mới).", Toast.LENGTH_SHORT).show();
+            db.beginTransaction();
+            try {
+                // 1) Xử lý TaiKhoan: cập nhật hoặc tạo mới nếu cần
+                if (maTaiKhoan != -1) {
+                    ContentValues tkValues = new ContentValues();
+                    boolean needUpdateTK = false;
+                    // Only update if provided (email field is read-only, but still handle if changed programmatically)
+                    if (!TextUtils.isEmpty(matkhau)) { tkValues.put("MatKhau", matkhau); needUpdateTK = true; }
+                    if (!TextUtils.isEmpty(email)) { tkValues.put("Email", email); needUpdateTK = true; }
+                    if (needUpdateTK) {
+                        int rows = db.update("TaiKhoan", tkValues, "MaTaiKhoan = ?", new String[]{String.valueOf(maTaiKhoan)});
+                        if (rows <= 0) Log.w(TAG, "Update TaiKhoan returned 0 rows for id=" + maTaiKhoan);
                     }
                 } else {
-                    long id = db.insert("BangCap", null, bcValues);
-                    if (id != -1) {
-                        Toast.makeText(requireContext(), "Tạo bằng cấp thành công.", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(requireContext(), "Lỗi khi tạo bằng cấp.", Toast.LENGTH_SHORT).show();
+                    // no maTaiKhoan: create one if password/email provided
+                    if (!TextUtils.isEmpty(matkhau) || !TextUtils.isEmpty(email)) {
+                        ContentValues tkValues = new ContentValues();
+                        if (!TextUtils.isEmpty(matkhau)) tkValues.put("MatKhau", matkhau);
+                        if (!TextUtils.isEmpty(email)) tkValues.put("Email", email);
+                        long tkId = db.insert("TaiKhoan", null, tkValues);
+                        if (tkId == -1) {
+                            throw new RuntimeException("Insert TaiKhoan failed (insert returned -1). Kiểm tra ràng buộc trên bảng TaiKhoan.");
+                        }
+                        maTaiKhoan = (int) tkId;
+                        // gán MaTaiKhoan vào NguoiDung sau
                     }
                 }
+
+                // 2) Cập nhật NguoiDung (không lưu MatKhau)
+                ContentValues userValues = new ContentValues();
+                userValues.put("HoTen", name);
+                userValues.put("CCCD", cccd);
+                userValues.put("SDT", phone);
+                if (!TextUtils.isEmpty(ngaySinh)) userValues.put("NgaySinh", ngaySinh);
+                if (!TextUtils.isEmpty(gioiTinh)) userValues.put("GioiTinh", gioiTinh);
+                if (maTaiKhoan != -1) userValues.put("MaTaiKhoan", maTaiKhoan);
+
+                int updated = db.update("NguoiDung", userValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+                if (updated <= 0) {
+                    Log.w(TAG, "Update NguoiDung returned 0 rows for id=" + userId);
+                }
+
+                // 3) SucKhoe (giữ logic cũ)
+                cursor = db.rawQuery("SELECT MaSucKhoe FROM SucKhoe WHERE MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+                if (cursor != null && cursor.moveToFirst()) {
+                    ContentValues healthValues = new ContentValues();
+                    Double chieuCao = parseDoubleOrNull(chieuCaoStr);
+                    Double canNang = parseDoubleOrNull(canNangStr);
+                    if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
+                    else healthValues.putNull("ChieuCao");
+                    if (canNang != null) healthValues.put("CanNang", canNang);
+                    else healthValues.putNull("CanNang");
+
+                    healthValues.put("BenhNen", benhNen);
+                    healthValues.put("NgayKham", ngayKham);
+                    Integer maTuyInt = parseIntOrNull(maTuy);
+                    if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
+                    else if (!maTuy.isEmpty()) healthValues.put("MaTuy", maTuy);
+                    healthValues.put("KetLuan", ketLuan);
+
+                    int healthUpdated = db.update("SucKhoe", healthValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+                    if (healthUpdated < 1) {
+                        healthValues.put("MaNguoiDung", userId);
+                        db.insert("SucKhoe", null, healthValues);
+                    }
+                } else {
+                    ContentValues healthValues = new ContentValues();
+                    healthValues.put("MaNguoiDung", userId);
+                    Double chieuCao = parseDoubleOrNull(chieuCaoStr);
+                    Double canNang = parseDoubleOrNull(canNangStr);
+                    if (chieuCao != null) healthValues.put("ChieuCao", chieuCao);
+                    if (canNang != null) healthValues.put("CanNang", canNang);
+                    healthValues.put("BenhNen", benhNen);
+                    healthValues.put("NgayKham", ngayKham);
+                    Integer maTuyInt = parseIntOrNull(maTuy);
+                    if (maTuyInt != null) healthValues.put("MaTuy", maTuyInt);
+                    healthValues.put("KetLuan", ketLuan);
+
+                    db.insert("SucKhoe", null, healthValues);
+                }
                 if (cursor != null) { cursor.close(); cursor = null; }
+
+                // 4) BangCap (chỉ cho non-admin)
+                if (!isAdmin) {
+                    cursor = db.rawQuery("SELECT MaBangCap FROM BangCap WHERE MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+                    ContentValues bcValues = new ContentValues();
+                    bcValues.put("MaNguoiDung", userId);
+                    if (!TextUtils.isEmpty(loai)) bcValues.put("Loai", loai);
+                    else bcValues.putNull("Loai");
+                    if (!TextUtils.isEmpty(ngayCap)) bcValues.put("NgayCap", ngayCap);
+                    else bcValues.putNull("NgayCap");
+                    if (!TextUtils.isEmpty(ngayHetHan)) bcValues.put("NgayHetHan", ngayHetHan);
+                    else bcValues.putNull("NgayHetHan");
+                    if (!TextUtils.isEmpty(noiCap)) bcValues.put("NoiCap", noiCap);
+                    else bcValues.putNull("NoiCap");
+
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int rows = db.update("BangCap", bcValues, "MaNguoiDung = ?", new String[]{String.valueOf(userId)});
+                        if (rows > 0) {
+                            Log.d(TAG, "Cập nhật bằng cấp thành công.");
+                        } else {
+                            long id = db.insert("BangCap", null, bcValues);
+                            if (id != -1) Log.d(TAG, "Lưu bằng cấp (tạo mới). id=" + id);
+                        }
+                    } else {
+                        long id = db.insert("BangCap", null, bcValues);
+                        if (id != -1) Log.d(TAG, "Tạo bằng cấp thành công id=" + id);
+                    }
+                    if (cursor != null) { cursor.close(); cursor = null; }
+                }
+
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
             }
 
-            String msg = (1 > 0) ? "Cập nhật thông tin thành công." : "Đã lưu (tạo mới) thông tin người dùng.";
-            Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), "Lưu thông tin thành công.", Toast.LENGTH_SHORT).show();
 
             Bundle result = new Bundle();
             result.putBoolean("profile_updated", true);
@@ -629,6 +672,7 @@ public class EditProfileFragment extends Fragment {
         if (edtGender != null) removeFieldErrorAbove(edtGender);
         if (edtDateIssued != null) removeFieldErrorAbove(edtDateIssued);
         if (edtAdress != null) removeFieldErrorAbove(edtAdress);
+        if (edtStatus != null) removeFieldErrorAbove(edtStatus);
 
         boolean ok = true;
 
@@ -660,7 +704,7 @@ public class EditProfileFragment extends Fragment {
             setFieldErrorAbove(edtPhone, "Vui lòng nhập số điện thoại");
             ok = false;
         } else if (!PHONE_PATTERN_10_11.matcher(phone).matches()) {
-            setFieldErrorAbove(edtPhone, "Số điện thoại không hợp lệ (10-11 chữ số)");
+            setFieldErrorAbove(edtPhone, "Số điện thoại không hợp lệ (10 chữ số)");
             ok = false;
         }
 
@@ -712,9 +756,6 @@ public class EditProfileFragment extends Fragment {
                     else if (isBeforeToday(d)) { setFieldErrorAbove(edtExpired, "Bằng đã hết hạn, không hợp lệ"); ok = false; }
                 }
             }
-
-            // NOTE: theo yêu cầu, không bắt buộc kiểm tra 'Loai' và 'NoiCap' — giống EditDriver
-            // Nhưng nếu bạn muốn kiểm tra không rỗng, có thể bật kiểm tra ở đây.
         }
 
         // Gender (if provided) must be Nam/Nữ
@@ -725,6 +766,15 @@ public class EditProfileFragment extends Fragment {
                 if (!(low.equals("nam") || low.equals("nữ") || low.equals("nu"))) {
                     setFieldErrorAbove(edtGender, "Vui lòng chọn giới tính (Nam/Nữ)"); ok = false;
                 }
+            }
+        }
+
+        // PASSWORD rule for non-admin: if password not empty -> must match strong pattern
+        if (!isAdmin) {
+            String pwd = edtStatus == null ? "" : edtStatus.getText().toString().trim();
+            if (!TextUtils.isEmpty(pwd) && !PASSWORD_STRONG_PATTERN.matcher(pwd).matches()) {
+                setFieldErrorAbove(edtStatus, "Mật khẩu tối thiểu 8 ký tự, gồm số, chữ thường, chữ in hoa, ký tự @#$%&");
+                ok = false;
             }
         }
 

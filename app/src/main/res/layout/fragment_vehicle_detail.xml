@@ -180,7 +180,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Loại xe"
+                        android:text="Biển số"
                         android:textColor="#1E63E9"
                         android:gravity="center"
                         android:layout_marginTop="10dp"/>
@@ -211,7 +211,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Biển số"
+                        android:text="Loại xe"
                         android:textColor="#1E63E9"
                         android:gravity="center"
                         android:layout_marginTop="10dp"/>

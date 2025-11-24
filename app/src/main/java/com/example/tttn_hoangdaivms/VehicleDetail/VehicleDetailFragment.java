@@ -18,6 +18,10 @@ import androidx.fragment.app.Fragment;
 import com.example.tttn_hoangdaivms.Database.Database;
 import com.example.tttn_hoangdaivms.R;
 
+/**
+ * VehicleDetailFragment - hiển thị thông tin xe, lái xe, bảo trì, bảo hiểm và trạng thái
+ * LƯU Ý: sửa để lấy trạng thái từ bảng Telemetry (câu query trực tiếp, không gọi helper không tồn tại).
+ */
 public class VehicleDetailFragment extends Fragment {
     private static final String TAG = "VehicleDetailFragment";
     public static final String ARG_MA_XE = "MaXe";
@@ -132,10 +136,11 @@ public class VehicleDetailFragment extends Fragment {
         Cursor cXe = null;
         Cursor cBaoTri = null;
         Cursor cBaoHiem = null;
+        Cursor cTelemetry = null;
         // Variables to hold values read from DB
         int maNguoiDung = -1;
         String bienSo = null, loaiXe = null, hangSX = null, mauSac = null, soHieu = null;
-        String hoTen = null, trangThai = null;
+        String hoTen = null, trangThaiNguoiDung = null, trangThaiTelemetry = null;
         String ngayGanNhat = null, noiDung = null, donVi = null;
         String soHD = null, ngayBD = null, ngayKT = null, congTy = null;
 
@@ -157,7 +162,6 @@ public class VehicleDetailFragment extends Fragment {
                 mauSac = getStringSafeLocal(cXe, "MauSac");
                 soHieu = getStringSafeLocal(cXe, "SoHieu");
             } else {
-                // no vehicle found -> update UI and return
                 requireActivity().runOnUiThread(() ->
                         Toast.makeText(requireContext(), "Không tìm thấy thông tin xe (MaXe=" + maXe + ")", Toast.LENGTH_SHORT).show()
                 );
@@ -173,7 +177,7 @@ public class VehicleDetailFragment extends Fragment {
             try { if (cXe != null && !cXe.isClosed()) cXe.close(); } catch (Exception ignored) {}
         }
 
-        // 2) Lấy thông tin người (nếu có)
+        // 2) Lấy người (tên và trạng thái người dùng - giữ để fallback)
         if (maNguoiDung != -1) {
             Cursor cNguoi = null;
             try {
@@ -182,7 +186,7 @@ public class VehicleDetailFragment extends Fragment {
                         new String[]{String.valueOf(maNguoiDung)});
                 if (cNguoi != null && cNguoi.moveToFirst()) {
                     hoTen = getStringSafeLocal(cNguoi, "HoTen");
-                    trangThai = getStringSafeLocal(cNguoi, "TrangThai");
+                    trangThaiNguoiDung = getStringSafeLocal(cNguoi, "TrangThai");
                 }
             } catch (Exception ex) {
                 Log.e(TAG, "Error reading NguoiDung", ex);
@@ -191,7 +195,7 @@ public class VehicleDetailFragment extends Fragment {
             }
         }
 
-        // 3) Lấy BaoTri mới nhất cho MaXe
+        // 3) BaoTri
         try {
             try {
                 cBaoTri = database.getLatestBaoTriByMaXe(maXe);
@@ -211,12 +215,11 @@ public class VehicleDetailFragment extends Fragment {
             try { if (cBaoTri != null && !cBaoTri.isClosed()) cBaoTri.close(); } catch (Exception ignored) {}
         }
 
-        // 4) Lấy BaoHiem mới nhất cho MaXe (SỬA: dùng MaXe chứ không phải MaNguoiDung)
+        // 4) BaoHiem
         try {
             try {
                 cBaoHiem = database.getLatestBaoHiemByMaXe(maXe);
             } catch (Exception e) {
-                // fallback rawQuery: lọc theo MaXe
                 cBaoHiem = database.getReadableDatabase().rawQuery(
                         "SELECT SoHD, NgayBatDau, NgayKetThuc, CongTy FROM BaoHiem WHERE MaXe = ? ORDER BY MaBaoHiem DESC LIMIT 1",
                         new String[]{String.valueOf(maXe)});
@@ -233,10 +236,94 @@ public class VehicleDetailFragment extends Fragment {
             try { if (cBaoHiem != null && !cBaoHiem.isClosed()) cBaoHiem.close(); } catch (Exception ignored) {}
         }
 
+        // 5) --- CẢI TIẾN: LẤY TRẠNG THÁI TỪ TELEMETRY KHÔNG PHỤ THUỘC TÊN CỘT ---
+        try {
+            // 5a. Thử lấy 1 bản ghi nếu có cột thời gian tiêu chuẩn (như ThoiGian) - nhanh
+            boolean foundStatus = false;
+            try {
+                cTelemetry = database.getReadableDatabase().rawQuery(
+                        "SELECT TrangThaiXe, TrangThai FROM Telemetry WHERE MaXe = ? ORDER BY ThoiGian DESC LIMIT 1",
+                        new String[]{String.valueOf(maXe)});
+                if (cTelemetry != null && cTelemetry.moveToFirst()) {
+                    String ttx = null;
+                    try { ttx = getStringSafeLocal(cTelemetry, "TrangThaiXe"); } catch (Exception ignored) {}
+                    if (!TextUtils.isEmpty(ttx)) {
+                        trangThaiTelemetry = ttx;
+                        foundStatus = true;
+                        Log.d(TAG, "Telemetry status from column TrangThaiXe");
+                    } else {
+                        String ttf = null;
+                        try { ttf = getStringSafeLocal(cTelemetry, "TrangThai"); } catch (Exception ignored) {}
+                        if (!TextUtils.isEmpty(ttf)) {
+                            trangThaiTelemetry = ttf;
+                            foundStatus = true;
+                            Log.d(TAG, "Telemetry status from column TrangThai");
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                // có thể không có cột ThoiGian -> bỏ qua và tiếp fallback
+                Log.d(TAG, "Telemetry quick query failed or ThoiGian missing - will fallback. " + ex.getMessage());
+            } finally {
+                try { if (cTelemetry != null && !cTelemetry.isClosed()) cTelemetry.close(); } catch (Exception ignored) {}
+            }
+
+            // 5b. Nếu chưa tìm được trạng thái, fallback: lấy một vài bản ghi gần nhất theo rowid và quét cột
+            if (!foundStatus) {
+                String[] candidateNames = new String[]{
+                        "TrangThaiXe", "TrangThai", "trangthaixe", "trangthai",
+                        "status", "Status", "State", "TrangThaiXeText"
+                };
+
+                Cursor cFallback = null;
+                try {
+                    cFallback = database.getReadableDatabase().rawQuery(
+                            "SELECT * FROM Telemetry WHERE MaXe = ? ORDER BY rowid DESC LIMIT 5",
+                            new String[]{String.valueOf(maXe)});
+                    if (cFallback != null && cFallback.moveToFirst()) {
+                        // iterate rows
+                        do {
+                            String[] cols = cFallback.getColumnNames();
+                            for (String cand : candidateNames) {
+                                // find actual column name ignoring case
+                                int idx = -1;
+                                for (int i = 0; i < cols.length; i++) {
+                                    if (cols[i] != null && cols[i].equalsIgnoreCase(cand)) { idx = i; break; }
+                                }
+                                if (idx != -1) {
+                                    String val = cFallback.isNull(idx) ? null : cFallback.getString(idx);
+                                    if (!TextUtils.isEmpty(val)) {
+                                        trangThaiTelemetry = val;
+                                        foundStatus = true;
+                                        Log.d(TAG, "Telemetry status from fallback column '" + cols[idx] + "' value='" + val + "'");
+                                        break;
+                                    }
+                                }
+                            }
+                            if (foundStatus) break;
+                        } while (cFallback.moveToNext());
+                    } else {
+                        Log.d(TAG, "No telemetry rows returned in fallback query for MaXe=" + maXe);
+                    }
+                } catch (Exception ex) {
+                    Log.e(TAG, "Telemetry fallback query error: " + ex.getMessage(), ex);
+                } finally {
+                    try { if (cFallback != null && !cFallback.isClosed()) cFallback.close(); } catch (Exception ignored) {}
+                }
+            }
+        } catch (Exception ex) {
+            Log.e(TAG, "Error reading Telemetry", ex);
+        }
+
+        // Chọn giá trị trạng thái hiển thị: ưu tiên telemetry, nếu không có thì dùng trangThai từ NguoiDung
+        final String statusToShow = !TextUtils.isEmpty(trangThaiTelemetry) ? trangThaiTelemetry :
+                (!TextUtils.isEmpty(trangThaiNguoiDung) ? trangThaiNguoiDung : null);
+
         // Tất cả dữ liệu đã được đọc và cursors đã đóng — giờ cập nhật UI bằng các biến thuần
         final String finalBienSo = bienSo, finalLoaiXe = loaiXe, finalHangSX = hangSX,
                 finalMauSac = mauSac, finalSoHieu = soHieu;
-        final String finalHoTen = hoTen, finalTrangThai = trangThai;
+        final String finalHoTen = hoTen;
+        final String finalStatus = statusToShow;
         final String finalNgayGanNhat = ngayGanNhat, finalNoiDung = noiDung, finalDonVi = donVi;
         final String finalSoHD = soHD, finalNgayBD = ngayBD, finalNgayKT = ngayKT, finalCongTy = congTy;
 
@@ -248,9 +335,10 @@ public class VehicleDetailFragment extends Fragment {
             tvMauSac.setText(!TextUtils.isEmpty(finalMauSac) ? finalMauSac : "-");
             tvSoHieu.setText(!TextUtils.isEmpty(finalSoHieu) ? finalSoHieu : "-");
 
-            // set nguoi dung
+            // set nguoi dung (tên)
             tvDriverName.setText(!TextUtils.isEmpty(finalHoTen) ? finalHoTen : "Không rõ");
-            tvStatus.setText(!TextUtils.isEmpty(finalTrangThai) ? finalTrangThai : "-");
+            // set trạng thái: từ telemetry nếu có, còn không thì dùng trang thai người dùng
+            tvStatus.setText(!TextUtils.isEmpty(finalStatus) ? finalStatus : "-");
 
             // set bao tri
             if (!TextUtils.isEmpty(finalNgayGanNhat) || !TextUtils.isEmpty(finalNoiDung) || !TextUtils.isEmpty(finalDonVi)) {
@@ -272,4 +360,5 @@ public class VehicleDetailFragment extends Fragment {
             tvCongTy.setText(!TextUtils.isEmpty(finalCongTy) ? finalCongTy : "-");
         });
     }
+
 }
