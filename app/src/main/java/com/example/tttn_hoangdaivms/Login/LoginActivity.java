@@ -45,7 +45,7 @@ public class LoginActivity extends AppCompatActivity {
     private boolean isPasswordVisible = false;
 
     // định dạng dùng cho TrangThaiUpdatedAt
-    private static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+    private static final String DATETIME_FORMAT = "dd/MM/yyyy HH:mm:ss";
     // khoảng 24 giờ tính bằng milliseconds
     private static final long MILLIS_24H = 24L * 60L * 60L * 1000L;
 
